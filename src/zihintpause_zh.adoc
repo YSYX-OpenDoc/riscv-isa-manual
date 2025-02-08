@@ -1,5 +1,5 @@
 [[zihintpause]]
-== “Zihintpause” 扩展 - PAUSE 提示指令，版本 2.0
+== "Zihintpause" 扩展 - PAUSE 提示指令，版本 2.0
 
 PAUSE 指令是一个提示（HINT），它表示当前硬件线程的指令退休速率应该暂时减慢或暂停。其影响的持续时间必须有界，且可能为零。
 (((PAUSE, HINT)))
