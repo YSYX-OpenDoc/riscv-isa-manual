@@ -1,0 +1,179 @@
+== "Zacas" 扩展用于原子比较并交换（CAS）指令，版本 1.0.0
+
+=== 介绍
+
+比较并交换（CAS）提供了一种简单且通常更快的方式来执行线程同步操作，当作为硬件指令支持时。CAS 通常用于无锁和无等待算法。本扩展提议 CAS 指令操作 32 位、64 位和 128 位（仅 RV64）数据值。CAS 指令支持 C++11 原子比较和交换操作。
+
+虽然可以使用 LR/SC 实现 XLEN 宽数据的比较并交换，但 CAS 原子指令在高度并行系统中比 LR/SC 更具扩展性。许多无锁算法，例如无锁队列，需要操作指针变量。简单的 CAS 操作可能不足以防止在操作指针变量的算法中常见的 ABA 问题。为避免 ABA 问题，算法将引用计数器与指针变量关联，并使用四字比较并交换（同时操作指针和计数器）进行更新。双字和四字 CAS 指令支持实现避免 ABA 问题的算法。
+
+Zacas 扩展依赖于 Zaamo 扩展 cite:[unpriv]。
+
+[[chapter2]]
+=== 字/双字/四字 CAS（AMOCAS.W/D/Q）
+
+[wavedrom, , ]
+....
+{reg: [
+  {bits:  7, name: 'opcode', attr:'AMO'},
+  {bits:  5, name: 'rd', attr:'dest'},
+  {bits:  3, name: 'funct3', attr:['010', '011', '100']},
+  {bits:  5, name: 'rs1', attr:'addr'},
+  {bits:  5, name: 'rs2', attr:'src'},
+  {bits:  1, name: 'rl'},
+  {bits:  1, name: 'aq'},
+  {bits:  5, name: '00101', attr:['AMOCAS.W', 'AMOCAS.D', 'AMOCAS.Q']},
+], config:{lanes: 1, hspace:1024}}
+....
+
+对于 RV32，`AMOCAS.W` 从 `rs1` 地址原子性地加载一个 32 位数据值，将加载的值与 `rd` 中的 32 位值进行比较，如果比较结果按位相等，则将 `rs2` 中的 32 位值存储到 `rs1` 的原始地址。加载的值放入寄存器 `rd`。`AMOCAS.W` 在 RV32 上执行的操作如下：
+
+[listing]
+----
+    temp = mem[X(rs1)]
+    if ( temp == X(rd) )
+        mem[X(rs1)] = X(rs2)
+    X(rd) = temp
+----
+
+`AMOCAS.D` 类似于 `AMOCAS.W`，但操作 64 位数据值。
+
+对于 RV32，`AMOCAS.D` 从 `rs1` 地址原子性地加载 64 位数据值，将加载的值与由 `rd` 和 `rd+1` 组成的寄存器对中的 64 位值进行比较，如果比较结果按位相等，则将 `rs2` 和 `rs2+1` 寄存器对中的 64 位值存储到 `rs1` 的原始地址。加载的值放入寄存器对 `rd` 和 `rd+1`。指令要求寄存器对中的第一个寄存器为偶数；在 `rs2` 和 `rd` 中指定奇数寄存器的编码是保留的。当源寄存器对的第一个寄存器为 `x0` 时，寄存器对的两半都读取为零。当目标寄存器对的第一个寄存器为 `x0` 时，整个寄存器结果被丢弃，且不写入任何目标寄存器。`AMOCAS.D` 在 RV32 上执行的操作如下：
+[listing]
+    temp0 = mem[X(rs1)+0]
+    temp1 = mem[X(rs1)+4]
+    comp0 = (rd == x0)  ? 0 : X(rd)
+    comp1 = (rd == x0)  ? 0 : X(rd+1)
+    swap0 = (rs2 == x0) ? 0 : X(rs2)
+    swap1 = (rs2 == x0) ? 0 : X(rs2+1)
+    if ( temp0 == comp0 ) && ( temp1 == comp1 )
+        mem[X(rs1)+0] = swap0
+        mem[X(rs1)+4] = swap1
+    endif
+    if ( rd != x0 )
+        X(rd)   = temp0
+        X(rd+1) = temp1
+    endif
+
+对于 RV64，`AMOCAS.W` 从 `rs1` 地址原子性地加载一个 32 位数据值，将加载的值与 `rd` 中的低 32 位值进行比较，如果比较结果按位相等，则将 `rs2` 中的低 32 位值存储到 `rs1` 的原始地址。从内存加载的 32 位值被符号扩展并放入寄存器 `rd`。`AMOCAS.W` 在 RV64 上执行的操作如下：
+
+[listing]
+    temp[31:0] = mem[X(rs1)]
+    if ( temp[31:0] == X(rd)[31:0] )
+        mem[X(rs1)] = X(rs2)[31:0]
+    X(rd) = SignExtend(temp[31:0])
+
+对于 RV64，`AMOCAS.D` 从 `rs1` 地址原子性地加载 64 位数据值，将加载的值与 `rd` 中的 64 位值进行比较，如果比较结果按位相等，则将 `rs2` 中的 64 位值存储到 `rs1` 的原始地址。加载的值放入寄存器 `rd`。`AMOCAS.D` 在 RV64 上执行的操作如下：
+[listing]
+    temp = mem[X(rs1)]
+    if ( temp == X(rd) )
+        mem[X(rs1)] = X(rs2)
+    X(rd) = temp
+
+`AMOCAS.Q`（仅 RV64）从 `rs1` 地址原子性地加载 128 位数据值，将加载的值与由 `rd` 和 `rd+1` 组成的寄存器对中的 128 位值进行比较，如果比较结果按位相等，则将 `rs2` 和 `rs2+1` 寄存器对中的 128 位值存储到 `rs1` 的原始地址。加载的值放入寄存器对 `rd` 和 `rd+1`。指令要求寄存器对中的第一个寄存器为偶数；在 `rs2` 和 `rd` 中指定奇数寄存器的编码是保留的。当源寄存器对的第一个寄存器为 `x0` 时，寄存器对的两半都读取为零。当目标寄存器对的第一个寄存器为 `x0` 时，整个寄存器结果被丢弃，且不写入任何目标寄存器。`AMOCAS.Q` 执行的操作如下：
+[listing]
+    temp0 = mem[X(rs1)+0]
+    temp1 = mem[X(rs1)+8]
+    comp0 = (rd == x0)  ? 0 : X(rd)
+    comp1 = (rd == x0)  ? 0 : X(rd+1)
+    swap0 = (rs2 == x0) ? 0 : X(rs2)
+    swap1 = (rs2 == x0) ? 0 : X(rs2+1)
+    if ( temp0 == comp0 ) && ( temp1 == comp1 )
+        mem[X(rs1)+0] = swap0
+        mem[X(rs1)+8] = swap1
+    endif
+    if ( rd != x0 )
+        X(rd)   = temp0
+        X(rd+1) = temp1
+    endif
+
+[NOTE]
+====
+对于未来的 RV128 扩展，`AMOCAS.Q` 将在 `rs2` 和 `rd` 中编码一个 XLEN=128 的单寄存器。
+====
+
+[NOTE]
+====
+一些算法可能会将内存位置的先前数据值加载到用于 Zacas 指令的比较数据值源寄存器中。当使用 Zacas 指令时，使用寄存器对来提供比较值，可以使用两个单独的加载来加载这两个寄存器。两个单独的加载可能会读取不一致的值对，但这不是问题，因为 `AMOCAS` 操作本身使用原子加载对从内存中获取数据值进行比较。
+
+以下示例代码序列说明了在 RV32 实现中使用 `AMOCAS.D` 原子性地递增 64 位计数器。
+[listing]
+# a0 - 计数器地址。
+increment:
+  lw   a2, (a0)      # 使用两个单独的加载加载当前计数器值
+  lw   a3, 4(a0)
+retry:
+  mv   a6, a2        # 保存当前值的低 32 位
+  mv   a7, a3        # 保存当前值的高 32 位
+  addi a4, a2, 1     # 递增低 32 位
+  sltu a1, a4, a2    # 确定是否有进位
+  add  a5, a3, a1    # 如果有进位，则将其加到高 32 位
+  amocas.d.aqrl a2, a4, (a0)
+  bne  a2, a6, retry # 如果 amocas.d 失败，则重试
+  bne  a3, a7, retry # 使用 amocas.d 加载的当前值重试
+  ret
+====
+
+与 A 扩展中的 AMO 一样，`AMOCAS.W/D/Q` 要求 `rs1` 中的地址自然对齐到操作数的大小（即，四字对齐为 16 字节，双字对齐为 8 字节，字对齐为 4 字节）。如果地址未自然对齐，则适用相同的异常选项。
+
+与 A 扩展中的 AMO 一样，`AMOCAS.W/D/Q` 可选地提供释放一致性语义，使用 `aq` 和 `rl` 位，以帮助实现多处理器同步。当 `aq` 位为 1 时，`AMOCAS.W/D/Q` 成功执行的内存操作具有获取语义；当 `rl` 位为 1 时，具有释放语义。当 `AMOCAS.W/D/Q` 不成功时，内存操作具有获取语义（如果 `aq` 位为 1），但不具有释放语义（无论 `rl` 位如何）。
+
+可以使用 FENCE 指令来排序 `AMOCAS.W/D/Q` 指令产生的内存读访问和（如果产生）内存写访问。
+
+[NOTE]
+====
+不成功的 `AMOCAS.W/D/Q` 可以不执行内存写入，也可以写回从内存加载的旧值。如果产生内存写入，则不具有释放语义（无论 `rl` 位如何）。
+====
+
+`AMOCAS.W/D/Q` 指令始终需要写权限。
+
+<<<
+
+[NOTE]
+====
+以下示例代码序列说明了使用 `AMOCAS.Q` 实现无阻塞并发队列的 _enqueue_ 操作，使用 cite:[queue] 中概述的算法。该算法使用 `AMOCAS.Q` 指令原子性地操作指针及其关联的修改计数器，以避免 ABA 问题。
+
+[listing]
+# 无阻塞并发队列的入队操作。
+# 队列使用的数据结构：
+#   结构 pointer_t {ptr:   node_t *, count: uint64_t}
+#   结构 node_t    {next: pointer_t, value: data type}
+#   结构 queue_t   {Head: pointer_t, Tail:  pointer_t}
+# 过程的输入：
+#   a0 - Tail 变量的地址
+#   a4 - 要插入到尾部的新节点的地址
+enqueue:
+  ld   a6, (a0)          # a6 = Tail.ptr
+  ld   a7, 8(a0)         # a7 = Tail.count
+  ld   a2, (a6)          # a2 = Tail.ptr->next.ptr
+  ld   a3, 8(a6)         # a3 = Tail.ptr->next.count
+  ld   t1, (a0)
+  ld   t2, 8(a0)
+  bne  a6, t1, enqueue   # 如果 Tail 和 next 不一致，则重试
+  bne  a7, t2, enqueue   # 如果 Tail 和 next 不一致，则重试
+  bne  a2, x0, move_tail # 尾部是否指向最后一个节点？
+  mv   t1, a2            # 保存 Tail.ptr->next.ptr
+  mv   t2, a3            # 保存 Tail.ptr->next.count
+  addi a5, a3, 1         # 将节点链接到列表末尾
+  amocas.q.aqrl a2, a4, (a6)
+  bne  a2, t1, enqueue   # 如果 CAS 失败，则重试
+  bne  a3, t2, enqueue   # 如果 CAS 失败，则重试
+  addi a5, a7, 1         # 将 Tail 更新为插入的节点
+  amocas.q.aqrl a6, a4, (a0)
+  ret                    # 入队完成
+move_tail:               # 尾部未指向最后一个节点
+  addi a3, a7, 1         # 尝试将 Tail 指向下一个节点
+  amocas.q.aqrl a6, a2, (a0)
+  j    enqueue           # 重试
+
+====
+
+=== 额外的 AMO PMA
+
+A 扩展中定义了四个级别的 AMO 支持。Zacas 定义了三个额外的支持级别：`AMOCASW`、`AMOCASD` 和 `AMOCASQ`。
+
+`AMOCASW` 表示除了 `AMOArithmetic` 级别支持的指令外，还支持 `AMOCAS.W` 指令。`AMOCASD` 表示除了 `AMOCASW` 级别支持的指令外，还支持 `AMOCAS.D` 指令。`AMOCASQ` 表示除了 `AMOCASD` 级别支持的指令外，还支持 `AMOCAS.Q` 指令。
+
+[NOTE]
+====
+`AMOCASW/D/Q` 需要 `AMOArithmetic` 级别支持，因为 `AMOCAS.W/D/Q` 指令需要执行算术比较和交换操作的能力。
+====

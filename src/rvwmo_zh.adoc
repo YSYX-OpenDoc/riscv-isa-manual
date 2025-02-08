@@ -1,0 +1,595 @@
+[[memorymodel]]
+== RVWMO 内存一致性模型，版本 2.0
+
+本章定义了 RISC-V 内存一致性模型。内存一致性模型是一组规则，指定内存加载可以返回的值。RISC-V 使用一种称为 "RVWMO"（RISC-V 弱内存排序）的内存模型，旨在为架构师提供构建高性能可扩展设计的灵活性，同时支持可处理的编程模型。
+(((设计, 高性能)))
+(((设计, 可扩展)))
+
+在 RVWMO 下，从同一个 hart 运行的代码在其他内存指令的视角中似乎按顺序执行，但来自另一个 hart 的内存指令可能会观察到第一个 hart 的内存指令以不同的顺序执行。因此，多线程代码可能需要显式同步以保证不同 hart 之间的内存指令顺序。基础 RISC-V ISA 提供了用于此目的的 FENCE 指令，如 <<fence>> 中所述，而原子扩展 "A" 还定义了加载保留/存储条件和原子读-修改-写指令。
+(((原子, 未对齐)))
+
+用于总存储排序的标准 ISA 扩展 "Ztso"（<<ztso>>）通过特定于这些扩展的附加规则增强了 RVWMO。
+
+本规范的附录提供了内存一致性模型的公理和操作形式化以及其他解释材料。
+(((FENCE)))
+(((SFENCE)))
+
+[NOTE]
+====
+本章定义了常规主内存操作的内存模型。内存模型与 I/O 内存、指令获取、FENCE.I、页表遍历和 SFENCE.VMA 的交互尚未（尚未）形式化。上述部分或全部内容可能会在本规范的未来修订版中形式化。RV128 基础 ISA 和未来的 ISA 扩展（如 V 向量和 J JIT 扩展）将需要纳入未来的修订版。
+
+支持不同宽度重叠内存访问的内存一致性模型仍然是学术研究的活跃领域，尚未完全理解。不同大小的内存访问在 RVWMO 下如何交互的具体细节已根据我们当前的能力进行了规定，但如果发现新问题，可能会进行修订。
+====
+
+[[rvwmo]]
+=== RVWMO 内存模型的定义
+
+RVWMO 内存模型是根据 _全局内存顺序_ 定义的，这是所有 hart 产生的内存操作的总顺序。通常，多线程程序有许多不同的可能执行，每个执行都有其对应的全局内存顺序。
+(((RVWMO)))
+
+全局内存顺序是根据内存指令生成的原始加载和存储操作定义的。然后，它受到本章其余部分定义的约束。任何满足所有内存模型约束的执行都是合法执行（就内存模型而言）。
+
+[[rvwmo-primitives]]
+==== 内存模型原语
+
+内存操作的 _程序顺序_ 反映了在该 hart 的动态指令流中逻辑上排列生成每个加载和存储的指令的顺序；即，一个简单的顺序处理器将按该 hart 的指令执行顺序。
+
+内存访问指令产生 _内存操作_。内存操作可以是 _加载操作_、_存储操作_ 或同时是两者。所有内存操作都是单副本原子的：它们永远不会以部分完成状态被观察到。
+(((操作, 内存)))
+
+在 RV32GC 和 RV64GC 指令中，每个对齐的内存指令产生一个内存操作，有两个例外。首先，未成功的 SC 指令不会产生任何内存操作。其次，如果 XLEN<64，则 FLD 和 FSD 指令可能会产生多个内存操作，如 <<fld_fsd>> 中所述并在下文中澄清。对齐的 AMO 产生一个同时是加载操作和存储操作的内存操作。
+
+[NOTE]
+====
+RV128 基础指令集和未来的 ISA 扩展（如 *V*（向量）和 *P*（SIMD））中的指令可能会产生多个内存操作。然而，这些扩展的内存模型尚未形式化。
+====
+
+未对齐的加载或存储指令可以分解为任意粒度的组件内存操作。如果 XLEN<64，则 FLD 或 FSD 指令也可以分解为任意粒度的组件内存操作。这些指令生成的内存操作在程序顺序中彼此之间没有顺序，但它们在程序顺序中与前面的和后续的指令生成的内存操作之间有正常的顺序。
+原子扩展 "A" 不要求执行环境支持未对齐的原子指令。
+然而，如果通过未对齐原子粒度 PMA 支持未对齐原子，则 AMO 在原子粒度内不分解，基础 ISA 中定义的加载和存储也不分解，F、D 和 Q 扩展中定义的不超过 XLEN 位的加载和存储也不分解。
+(((分解)))
+
+[NOTE]
+====
+将未对齐内存操作分解到字节粒度有助于在不本地支持未对齐访问的实现上进行仿真。例如，这些实现可能只是逐字节迭代未对齐访问。
+====
+
+LR 指令和 SC 指令如果在程序顺序中 LR 先于 SC 且中间没有其他 LR 或 SC 指令，则称为 _配对_；相应的内存操作也称为配对（除非 SC 失败，在这种情况下不会生成存储操作）。确定 SC 必须成功、可能成功或必须失败的完整条件列表在 <<sec:lrsc>> 中定义。
+
+加载和存储操作还可以携带以下集合中的一个或多个排序注释："acquire-RCpc"、"acquire-RCsc"、"release-RCpc" 和 "release-RCsc"。设置了 _aq_ 的 AMO 或 LR 指令具有 "acquire-RCsc" 注释。设置了 _rl_ 的 AMO 或 SC 指令具有 "release-RCsc" 注释。设置了 _aq_ 和 _rl_ 的 AMO、LR 或 SC 指令同时具有 "acquire-RCsc" 和 "release-RCsc" 注释。
+
+为了方便起见，我们使用术语 "acquire 注释" 来指代 acquire-RCpc 注释或 acquire-RCsc 注释。同样，"release 注释" 指代 release-RCpc 注释或 release-RCsc 注释。"RCpc 注释" 指代 acquire-RCpc 注释或 release-RCpc 注释。"RCsc 注释" 指代 acquire-RCsc 注释或 release-RCsc 注释。
+
+[NOTE]
+====
+在内存模型文献中，术语 "RCpc" 代表具有处理器一致同步操作的释放一致性，术语 "RCsc" 代表具有顺序一致同步操作的释放一致性。
+
+虽然在文献中有许多不同的获取和释放注释定义，但在 RVWMO 的上下文中，这些术语由 <<ppo, 保留程序顺序>> 规则 5-7 简洁且完全定义。
+
+"RCpc" 注释目前仅在标准扩展 "Ztso"（<<ztso>>）中隐式分配给每个内存访问时使用。此外，尽管 ISA 当前不包含本地加载-获取或存储-释放指令，也不包含其 RCpc 变体，但 RVWMO 模型本身设计为向前兼容未来扩展中可能添加的任何或所有上述内容。
+====
+
+[[mem-dependencies]]
+==== 语法依赖性
+
+RVWMO 内存模型的定义部分依赖于语法依赖性的概念，定义如下。
+
+在定义依赖性的上下文中，_寄存器_ 指的是整个通用寄存器、CSR 的某些部分或整个 CSR。通过 CSR 跟踪依赖性的粒度特定于每个 CSR，并在 <<csr-granularity>> 中定义。
+
+语法依赖性是根据指令的 _源寄存器_、指令的 _目标寄存器_ 以及指令 _携带依赖性_ 从其源寄存器到其目标寄存器的方式定义的。本节提供了所有这些术语的一般定义；然而，<<source-dest-regs>> 提供了每个指令的具体细节的完整列表。
+
+通常，如果满足以下任一条件，则寄存器 _r_（除 `x0` 外）是指令 _i_ 的 _源寄存器_：
+
+* 在 _i_ 的操作码中，_rs1_、_rs2_ 或 _rs3_ 设置为 _r_
+* _i_ 是 CSR 指令，并且在 _i_ 的操作码中，_csr_ 设置为 _r_，除非 _i_ 是 CSRRW 或 CSRRWI 且 _rd_ 设置为 `x0`
+* _r_ 是 CSR 并且是 _i_ 的隐式源寄存器，如 <<source-dest-regs>> 中定义
+* _r_ 是与 _i_ 的另一个源寄存器别名的 CSR
+
+内存指令还进一步指定哪些源寄存器是 _地址源寄存器_，哪些是 _数据源寄存器_。
+
+通常，如果满足以下任一条件，则寄存器 _r_（除 `x0` 外）是指令 _i_ 的 _目标寄存器_：
+
+* 在 _i_ 的操作码中，_rd_ 设置为 _r_
+* _i_ 是 CSR 指令，并且在 _i_ 的操作码中，_csr_ 设置为 _r_，除非 _i_ 是 CSRRS 或 CSRRC 且 _rs1_ 设置为 `x0` 或 _i_ 是 CSRRSI 或 CSRRCI 且 uimm[4:0] 设置为零。
+* _r_ 是 _i_ 的隐式目标寄存器的 CSR，如 <<source-dest-regs>> 中定义
+* _r_ 是与 _i_ 的另一个目标寄存器别名的 CSR
+
+大多数非内存指令 _携带依赖性_ 从其每个源寄存器到其每个目标寄存器。然而，有一些例外；请参见 <<source-dest-regs>>。
+
+如果满足以下任一条件，则指令 _j_ 通过 _i_ 的目标寄存器 _s_ 和 _j_ 的源寄存器 _r_ 对指令 _i_ 具有 _语法依赖性_：
+
+* _s_ 与 _r_ 相同，并且在程序顺序中没有指令在 _i_ 和 _j_ 之间将 _r_ 作为目标寄存器
+* 在程序顺序中 _i_ 和 _j_ 之间存在指令 _m_，满足以下所有条件：
+. _j_ 通过目标寄存器 _q_ 和源寄存器 _r_ 对 _m_ 具有语法依赖性
+. _m_ 通过目标寄存器 _s_ 和源寄存器 _p_ 对 _i_ 具有语法依赖性
+. _m_ 携带依赖性从 _p_ 到 _q_
+
+最后，在以下定义中，令 _a_ 和 _b_ 为两个内存操作，_i_ 和 _j_ 为生成 _a_ 和 _b_ 的指令。
+
+如果 _r_ 是 _j_ 的地址源寄存器，并且 _j_ 通过源寄存器 _r_ 对 _i_ 具有语法依赖性，则 _b_ 对 _a_ 具有 _语法地址依赖性_
+
+如果 _b_ 是存储操作，_r_ 是 _j_ 的数据源寄存器，并且 _j_ 通过源寄存器 _r_ 对 _i_ 具有语法依赖性，则 _b_ 对 _a_ 具有 _语法数据依赖性_
+
+如果在程序顺序中 _i_ 和 _j_ 之间存在指令 _m_，并且 _m_ 是分支或间接跳转，并且 _m_ 对 _i_ 具有语法依赖性，则 _b_ 对 _a_ 具有 _语法控制依赖性_
+
+[NOTE]
+====
+一般来说，非 AMO 加载指令没有数据源寄存器，无条件非 AMO 存储指令没有目标寄存器。然而，成功的 SC 指令被认为在 _rd_ 中指定的寄存器是目标寄存器，因此可能存在指令对程序顺序中先于它的成功 SC 指令具有语法依赖性。
+====
+
+==== 保留程序顺序
+[[ppo]]
+任何给定程序执行的全局内存顺序尊重每个 hart 的程序顺序的一部分，但不是全部。必须由全局内存顺序尊重的程序顺序子集称为 _保留程序顺序_。
+
+保留程序顺序的完整定义如下（注意，AMO 同时是加载和存储）：如果 _a_ 在程序顺序中先于 _b_，_a_ 和 _b_ 都访问常规主内存（而不是 I/O 区域），并且满足以下任一条件，则内存操作 _a_ 在保留程序顺序中先于内存操作 _b_（因此也在全局内存顺序中）：
+
+[[overlapping-ordering]]
+* 重叠地址排序：
+. _b_ 是存储，并且 _a_ 和 _b_ 访问重叠的内存地址
+. _a_ 和 _b_ 是加载，_x_ 是 _a_ 和 _b_ 都读取的字节，在程序顺序中 _a_ 和 _b_ 之间没有对 _x_ 的存储，并且 _a_ 和 _b_ 返回由不同内存操作写入的 _x_ 的值
+. _a_ 由 AMO 或 SC 指令生成，_b_ 是加载，并且 _b_ 返回由 _a_ 写入的值
+* 显式同步
+[start=4]
+. 有一个 FENCE 指令将 _a_ 排在 _b_ 之前
+. _a_ 具有获取注释
+. _b_ 具有释放注释
+. _a_ 和 _b_ 都具有 RCsc 注释
+. _a_ 与 _b_ 配对
+* 语法依赖性
+[start=9]
+. _b_ 对 _a_ 具有语法地址依赖性
+. _b_ 对 _a_ 具有语法数据依赖性
+. _b_ 是存储，并且 _b_ 对 _a_ 具有语法控制依赖性
+* 管道依赖性
+[start=12]
+. _b_ 是加载，并且在程序顺序中 _a_ 和 _b_ 之间存在一些存储 _m_，_m_ 对 _a_ 具有地址或数据依赖性，并且 _b_ 返回由 _m_ 写入的值
+. _b_ 是存储，并且在程序顺序中 _a_ 和 _b_ 之间存在一些指令 _m_，_m_ 对 _a_ 具有地址依赖性
+
+==== 内存模型公理
+
+RISC-V 程序的执行仅在存在符合保留程序顺序并满足 _加载值公理_、_原子性公理_ 和 _进度公理_ 的全局内存顺序时才遵守 RVWMO 内存一致性模型。
+
+[[ax-load]]
+===== 加载值公理
+
+每个加载 _i_ 的每个字节返回由以下存储写入该字节的值，这些存储在全局内存顺序中是最新的：
+
+. 写入该字节并在全局内存顺序中先于 _i_ 的存储
+. 写入该字节并在程序顺序中先于 _i_ 的存储
+
+[[ax-atom]]
+===== 原子性公理
+
+如果 _r_ 和 _w_ 是由 hart _h_ 中对齐的 LR 和 SC 指令生成的配对加载和存储操作，_s_ 是对字节 _x_ 的存储，并且 _r_ 返回由 _s_ 写入的值，则 _s_ 必须在全局内存顺序中先于 _w_，并且在全局内存顺序中 _s_ 和 _w_ 之间不能有来自 _h_ 以外的 hart 对字节 _x_ 的存储。
+[NOTE]
+====
+<<ax-atom, 原子性公理>> 理论上支持不同宽度和不匹配地址的 LR/SC 对，因为实现允许 SC 操作在这种情况下成功。然而，实际上，我们预计这种模式很少见，并且不鼓励使用。
+====
+
+[[ax-prog]]
+===== 进度公理
+
+在全局内存顺序中，没有内存操作可以被无限序列的其他内存操作先于。
+
+[[csr-granularity]]
+=== CSR 依赖性跟踪粒度
+
+.CSR 中语法依赖性跟踪的粒度
+[%autowdith,float="center",align="center",cols="<,<,<",options="header",]
+|===
+|名称 |作为独立单元跟踪的部分 |别名
+|_fflags_ |位 4, 3, 2, 1, 0 |_fcsr_
+|_frm_ |整个 CSR |_fcsr_
+|_fcsr_ |位 7-5, 4, 3, 2, 1, 0 |_fflags_, _frm_
+|===
+
+注意：只读 CSR 未列出，因为它们不参与语法依赖性的定义。
+
+[[source-dest-regs]]
+=== 源寄存器和目标寄存器列表
+
+本节提供了每个指令的源寄存器和目标寄存器的具体列表。这些列表用于定义 <<mem-dependencies>> 中的语法依赖性。
+
+术语 "累积 CSR" 用于描述既是源寄存器又是目标寄存器的 CSR，但仅从自身到自身携带依赖性。
+
+指令从 "源寄存器" 列中的每个源寄存器到 "目标寄存器" 列中的每个目标寄存器，从 "源寄存器" 列中的每个源寄存器到 "累积 CSR" 列中的每个 CSR，以及从 "累积 CSR" 列中的每个 CSR 到自身携带依赖性，除非另有注释。
+
+关键：
+
+- ^A^ 地址源寄存器
+
+- ^D^ 数据源寄存器
+
+- † 指令不从任何源寄存器到任何目标寄存器携带依赖性
+
+- ‡ 指令按指定从源寄存器携带依赖性到目标寄存器
+
+.RV32I 基础整数指令集
+[%autowidth,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+||源寄存器 |目标寄存器|累积 CSR|
+
+|LUI | |_rd_ | |
+
+|AUIPC | |_rd_ ||
+
+|JAL | |_rd_ ||
+
+|JALR† |_rs1_ |_rd_ ||
+
+|BEQ |_rs1_, _rs2_ | ||
+
+|BNE |_rs1_, _rs2_ | ||
+
+|BLT |_rs1_, _rs2_ | ||
+
+|BGE |_rs1_, _rs2_ | ||
+
+|BLTU |_rs1_, _rs2_ | ||
+
+|BGEU |_rs1_, _rs2_ | ||
+
+|LB † | _rs1_  ^A^ | _rd_ ||
+
+|LH † | _rs1_  ^A^ | _rd_ ||
+
+|LW † | _rs1_  ^A^ | _rd_ ||
+
+|LBU † | _rs1_  ^A^ | _rd_ ||
+
+|LHU † | _rs1_  ^A^ | _rd_ ||
+
+|SB |_rs1_  ^A^, _rs2_ ^D^ | ||
+
+|SH |_rs1_  ^A^, _rs2_ ^D^ | ||
+
+|SW |_rs1_  ^A^, _rs2_ ^D^ | ||
+
+|ADDI |_rs1_ |_rd_ ||
+
+|SLTI |_rs1_ |_rd_ ||
+
+|SLTIU |_rs1_ |_rd_ ||
+
+|XORI |_rs1_ |_rd_ ||
+
+|ORI |_rs1_ |_rd_ ||
+
+|ANDI |_rs1_ |_rd_ ||
+
+|SLLI |_rs1_ |_rd_ ||
+
+|SRLI |_rs1_ |_rd_ ||
+
+|SRAI |_rs1_ |_rd_ ||
+
+|ADD |_rs1_, _rs2_ |_rd_ ||
+
+|SUB |_rs1_, _rs2_ |_rd_ ||
+
+|SLL |_rs1_, _rs2_ |_rd_ ||
+
+|SLT |_rs1_, _rs2_ |_rd_ ||
+
+|SLTU |_rs1_, _rs2_ |_rd_ ||
+
+|XOR |_rs1_, _rs2_ |_rd_ ||
+
+|SRL |_rs1_, _rs2_ |_rd_ ||
+
+|SRA |_rs1_, _rs2_ |_rd_ ||
+
+|OR |_rs1_, _rs2_ |_rd_ ||
+
+|AND |_rs1_, _rs2_ |_rd_ ||
+
+|FENCE | | ||
+
+|FENCE.I | | ||
+
+|ECALL | | ||
+
+|EBREAK | | ||
+
+|CSRRW‡ |_rs1_, _csr_^*^ | _rd_, _csr_ | |^*^除非 _rd_=`x0`
+
+|CSRRS‡ |_rs1_, _csr_ |_rd_ ^*^, _csr_ | |^*^除非 _rs1_=`x0`
+
+|CSRRC‡ |_rs1_, _csr_  |_rd_ ^*^, _csr_ | |^*^除非 _rs1_=`x0`
+
+5+| ‡ 从 _rs1_ 到 _csr_ 和从 _csr_ 到 _rd_ 携带依赖性
+
+|CSRRWI ‡ |_csr_ ^*^ |_rd_, _csr_  | |^*^除非 _rd_=_x0_
+
+|CSRRSI ‡ |_csr_ |_rd_, _csr_^*^  | |^*^除非 uimm[4:0]=0
+
+|CSRRCI ‡ |_csr_ |_rd_, _csr_^*^  | |^*^除非 uimm[4:0]=0
+
+5+| ‡ 从 _csr_ 到 _rd_ 携带依赖性
+|===
+
+.RV64I 基础整数指令集
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+| |源寄存器 |目标寄存器 |累积 CSR|
+
+|_LWU_ † |_rs1_  ^A^ |_rd_ | |
+
+|_LD_ † |_rs1_  ^A^ |_rd_ | |
+
+|SD |_rs1_  ^A^, _rs2_ ^D^ | | |
+
+|SLLI | _rs1_ | _rd_ | |
+
+|SRLI | _rs1_ | _rd_ | |
+
+|SRAI | _rs1_ | _rd_ | |
+
+|ADDIW | _rs1_ | _rd_ | |
+
+|SLLIW | _rs1_ | _rd_ | |
+
+|SRLIW | _rs1_ | _rd_ | |
+
+|SRAIW | _rs1_ | _rd_ | |
+
+|ADDW | _rs1_, _rs2_ |_rd_ ||
+
+|SUBW | _rs1_, _rs2_ |_rd_ ||
+
+|SLLW | _rs1_, _rs2_ |_rd_ ||
+
+|SRLW | _rs1_, _rs2_ |_rd_ ||
+
+|SRAW | _rs1_, _rs2_ |_rd_ ||
+|===
+
+.RV32M 标准扩展
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+| |源寄存器 |目标寄存器 |累积 CSR|
+
+|MUL | _rs1_, _rs2_ |_rd_ ||
+
+|MULH | _rs1_, _rs2_ |_rd_ ||
+
+|MULHSU |_rs1_, _rs2_ |_rd_ ||
+
+|MULHU |_rs1_, _rs2_ |_rd_ ||
+
+|DIV |_rs1_, _rs2_ |_rd_ ||
+
+|DIVU |_rs1_, _rs2_ |_rd_ ||
+
+|REM |_rs1_, _rs2_ |_rd_ ||
+
+|REMU |_rs1_, _rs2_ |_rd_ ||
+|===
+
+.RV64M 标准扩展
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+||源寄存器 |目标寄存器 |累积 CSR|
+
+|MULW |_rs1_, _rs2_ |_rd_ ||
+
+|DIVW |_rs1_, _rs2_ |_rd_ ||
+
+|DIVUW |_rs1_, _rs2_ |_rd_ ||
+
+|REMW |_rs1_, _rs2_ |_rd_ ||
+
+|REMUW |_rs1_, _rs2_ |_rd_ ||
+|===
+
+.RV32A 标准扩展
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+||源寄存器 |目标寄存器 |累积 CSR|
+
+|LR.W† | _rs1_  ^A^ | _rd_ | |
+
+|SC.W† | _rs1_  ^A^, _rs2_ ^D^ | _rd_ ^*^ | | ^*^ 如果成功
+
+|AMOSWAP.W† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOADD.W† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOXOR.W† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOAND.W† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOOR.W† |_rs1_ ^A^, _rs2_^D^ |_rd_ | |
+
+|AMOMIN.W† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOMAX.W† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOMINU.W† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOMAXU.W† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ | |
+
+|===
+
+.RV64A 标准扩展
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+
+| |源寄存器 |目标寄存器 |累积 CSR|
+
+|LR.D† |_rs1_  ^A^ |_rd_ | |
+
+|SC.D† |_rs1_ ^A^, _rs2_ ^D^ |_rd_ ^*^ | |^*^如果成功
+
+|AMOSWAP.D† |_rs1_  ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOADD.D† |_rs1_  ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOXOR.D† |_rs1_  ^A^, _rs2_ ^D^ |_rd_ | |
+
+|AMOAND.D† |_rs1_ ^A^, _rs2_^D^ |_rd_ | |
+
+|AMOOR.D† |_rs1_ ^A^, _rs2_^D^ |_rd_ | |
+
+|AMOMIN.D† |_rs1_ ^A^, _rs2_^D^ |_rd_ | |
+
+|AMOMAX.D† |_rs1_ ^A^, _rs2_^D^ |_rd_ | |
+
+|AMOMINU.D† |_rs1_ ^A^, _rs2_^D^ |_rd_ | |
+
+|AMOMAXU.D† |_rs1_ ^A^, _rs2_^D^ |_rd_ | |
+
+|===
+
+.RV32F 标准扩展
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+
+| |源寄存器 |目标寄存器 |累积 CSR |
+
+
+|FLW† |_rs1_ ^A^ |_rd_ | |
+
+|FSW |_rs1_ ^A^, _rs2_^D^ | | |
+
+|FMADD.S |_rs1_, _rs2_, _rs3_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FMSUB.S |_rs1_, _rs2_, _rs3_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FNMSUB.S |_rs1_, _rs2_, _rs3_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FNMADD.S |_rs1_, _rs2_, _rs3_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FADD.S |_rs1_, _rs2_, frm^*^ |_rd_ |NV, OF, NX |^*^如果 rm=111
+
+|FSUB.S |_rs1_, _rs2_, frm^*^ |_rd_ |NV, OF, NX |^*^如果 rm=111
+
+|FMUL.S |_rs1_, _rs2_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FDIV.S |_rs1_, _rs2_, frm^*^ |_rd_ |NV, DZ, OF, UF, NX |^*^如果 rm=111
+
+|FSQRT.S |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FSGNJ.S |_rs1_, _rs2_ |_rd_ | |
+
+|FSGNJN.S |_rs1_, _rs2_ |_rd_ | |
+
+|FSGNJX.S |_rs1_, _rs2_ |_rd_ | |
+
+|FMIN.S |_rs1_, _rs2_ |_rd_ |NV |
+
+|FMAX.S |_rs1_, _rs2_ |_rd_ |NV |
+
+|FCVT.W.S |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FCVT.WU.S |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FMV.X.W |_rs1_ |_rd_ | |
+
+|FEQ.S |_rs1_, _rs2_ |_rd_ |NV |
+
+|FLT.S |_rs1_, _rs2_ |_rd_ |NV |
+
+|FLE.S |_rs1_, _rs2_ |_rd_ |NV |
+
+|FCLASS.S |_rs1_ |_rd_ | |
+
+|FCVT.S.W |_rs1_, frm^*^ |_rd_ |NX |^*^如果 rm=111
+
+|FCVT.S.WU |_rs1_, frm^*^ |_rd_ |NX |^*^如果 rm=111
+
+|FMV.W.X |_rs1_ |_rd_ | |
+
+|===
+
+.RV64F 标准扩展
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+| |源寄存器 |目标寄存器 |累积 CSR|
+
+|FCVT.L.S |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FCVT.LU.S |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FCVT.S.L |_rs1_, frm^*^ |_rd_ |NX |^*^如果 rm=111
+
+|FCVT.S.LU |_rs1_, frm^*^ |_rd_ |NX |^*^如果 rm=111
+
+|===
+
+.RV32D 标准扩展
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+
+| |源寄存器|目标寄存器 |累积 CSR |
+
+
+|FLD† |_rs1_ ^A^ |_rd_ | |
+
+|FSD |_rs1_ ^A^, _rs2_^D^ | | |
+
+|FMADD.D |_rs1_, _rs2_, _rs3_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FMSUB.D |_rs1_, _rs2_, _rs3_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FNMSUB.D |_rs1_, _rs2_, _rs3_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FNMADD.D |_rs1_, _rs2_, _rs3_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FADD.D |_rs1_, _rs2_, frm^*^ |_rd_ |NV, OF, NX |^*^如果 rm=111
+
+|FSUB.D |_rs1_, _rs2_, frm^*^ |_rd_ |NV, OF, NX |^*^如果 rm=111
+
+|FMUL.D |_rs1_, _rs2_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FDIV.D |_rs1_, _rs2_, frm^*^ |_rd_ |NV, DZ, OF, UF, NX |^*^如果 rm=111
+
+|FSQRT.D |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FSGNJ.D |_rs1_, _rs2_ |_rd_ | |
+
+|FSGNJN.D |_rs1_, _rs2_ |_rd_ | |
+
+|FSGNJX.D |_rs1_, _rs2_ |_rd_ | |
+
+|FMIN.D |_rs1_, _rs2_ |_rd_ |NV |
+
+|FMAX.D |_rs1_, _rs2_ |_rd_ |NV |
+
+|FCVT.S.D |_rs1_, frm^*^ |_rd_ |NV, OF, UF, NX |^*^如果 rm=111
+
+|FCVT.D.S |_rs1_ |_rd_ |NV |
+
+|FEQ.D |_rs1_, _rs2_ |_rd_ |NV |
+
+|FLT.D |_rs1_, _rs2_ |_rd_ |NV |
+
+|FLE.D |_rs1_, _rs2_ |_rd_ |NV |
+
+|FCLASS.D |_rs1_ |_rd_ | |
+
+|FCVT.W.D |_rs1_,^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FCVT.WU.D |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FCVT.D.W |_rs1_ |_rd_ | |
+
+|FCVT.D.WU |_rs1_ |_rd_ | |
+
+|===
+
+.RV64D 标准扩展
+[%autowidth.stretch,float="center",align="center",cols="<,<,<,<,<",options="header"]
+|===
+| |源寄存器 |目标寄存器 |累积 CSR|
+
+|FCVT.L.S |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FCVT.LU.S |_rs1_, frm^*^ |_rd_ |NV, NX |^*^如果 rm=111
+
+|FCVT.S.L |_rs1_, frm^*^ |_rd_ |NX |^*^如果 rm=111
+
+|FCVT.S.LU |_rs1_, frm^*^ |_rd_ |NX |^*^如果 rm=111
+
+|===
+
