@@ -1,0 +1,4470 @@
+== 加密扩展：向量指令，版本 1.0.0
+
+本文档描述了 RISC-V 指令集架构的向量加密扩展。
+
+本文档已被 _批准_。
+不允许进行任何更改。任何希望或需要的更改可以成为后续新扩展的主题。批准的扩展从不修订。
+欲了解更多信息，请参见link:http://riscv.org/spec-state[这里]。
+
+[[crypto_vector_introduction]]
+=== 介绍
+
+本文档描述了 RISC-V 的 _向量_ 加密扩展提案。
+此处提出的所有指令都基于向量寄存器。
+这些指令旨在具有高性能，主要目标是大型应用和服务器级核心。
+一个配套章节 _卷 I：标量和熵源指令_，描述了不实现向量扩展的小型核心的加密指令提案。
+
+[[crypto_vector_audience]]
+==== 预期读者
+
+加密是一个专业领域，需要具有不同背景的人合作以安全高效地实现它。
+在可能的情况下，我们编写了本规范，使其易于所有人理解，尽管我们认识到，动机和对算法或其他规范和标准的引用可能对非领域专家来说不熟悉。
+
+本规范预计将被具有不同背景的各种人阅读和执行。
+我们试图在此捕捉这些背景，
+并简要解释我们期望他们了解的内容，以及它与规范的关系。
+我们希望这有助于人们理解哪些方面的规范对他们特别相关，以及哪些方面他们可以（安全地！）忽略或传递给同事。
+
+密码学家和密码软件开发人员::
+这些是我们期望使用本规范中的指令编写代码的人。
+他们应该理解我们包含这些指令的动机，并熟悉我们引用的大多数算法和外部标准。
+
+计算机架构师::
+我们不期望架构师具有密码学背景。
+尽管如此，我们期望架构师能够检查我们的指令以发现实现问题，理解指令在上下文中的使用方式，并就如何最好地满足密码学家的功能需求提供建议。
+
+数字设计工程师和微架构师::
+这些人将负责在核心内部实现规范。同样，不假定他们具有密码学专业知识，但我们期望他们能够解释规范并预见任何硬件实现问题，例如高频设计考虑因素，或存在延迟/面积权衡等。
+特别是，他们应该了解有关在硬件中高效实现 AES 和 SM4 SBoxes 的文献。
+
+验证工程师::
+这些人负责确保在硬件中正确实现扩展。
+不假定他们具有密码学背景。
+我们期望他们从规范中识别出有趣的测试用例。理解其实际使用情况将有助于此。
+
+这些绝不是唯一关心规范的人，但他们是我们在编写时最考虑的人。
+
+[[crypto_vector_sail_specifications]]
+==== Sail 规范
+
+RISC-V 维护了一个
+link:https://github.com/riscv/sail-riscv[正式模型]
+的 ISA 规范，
+使用 Sail ISA 规范语言实现
+引用：[sail]。
+请注意，_Sail_ 指的是规范语言本身，
+并且有一个使用 Sail 编写的 _RISC-V 模型_。
+
+我们本打算在本规范中包含实际的 Sail 代码。
+然而，向量加密 Sail 模型需要向量 Sail 模型作为构建基础。此向量加密扩展规范在有批准的 RISC-V 向量 Sail 模型之前已完成。
+因此，我们没有任何 Sail 代码可以包含在指令描述中。相反，我们包含了类似 Sail 的伪代码。虽然我们努力遵守 Sail 语法，但为了简洁起见，我们在某些地方做了一些调整，我们相信读者可以清楚地理解我们的意图。
+
+[NOTE]
+====
+当变量连接时，显示的顺序是它们在向量寄存器中从左到右的顺序。
+例如，指定为 `{a, b, e, f}` 的元素组将在向量寄存器中显示为 `a` 具有组中最高元素索引，`f` 具有组中最低索引。
+====
+
+为了简洁起见，我们的伪代码不包括掩码或尾元素的处理。我们遵循 *RISC-V "V" 向量扩展* 规范中描述的_不受干扰_和_不可知_策略。此外，代码没有明确处理重叠和 SEW 约束；这些在文本中明确说明。
+
+在许多情况下，伪代码包括
+调用支持函数，这些函数过于冗长，无法直接包含在规范中。
+这些支持代码列在
+<<crypto_vector_appx_sail>>。
+
+link:https://github.com/rems-project/sail/blob/sail2/manual.pdf[Sail 手册]
+是理解代码片段的推荐阅读材料。
+此外，
+link:https://github.com/billmcspadden-riscv/sail/blob/cookbook_br/cookbook/doc/TheSailCookbook_Complete.pdf[The Sail 编程语言：Sail 烹饪书]
+是一个正在编写的良好参考。
+
+有关最新的 RISC-V Sail 模型，请参阅
+正式模型 Github
+link:https://github.com/riscv/sail-riscv[仓库]。
+
+[[crypto_vector_policies]]
+==== 政策
+
+在创建此提案时，我们试图遵循以下政策：
+
+* 在以下两者之间进行选择时：
+  1) 支持算法的多样化实现策略
+  或
+  2) 支持单一实现风格，该风格更高效/成本更低；
+  向量加密扩展将选择更受约束但更高效的选项。
+  这符合 RISC-V 规范其他部分的常见模式，
+  在这些部分中，推荐（但不要求）执行特定任务的指令序列作为示例，以便硬件和软件实现者可以仅优化单一用例。
+  
+* 扩展将设计为支持_现有_标准化的
+  加密构造。
+  它不会尝试支持提议的标准，或仅存在于学术界的加密构造。
+  与 RISC-V 向量加密扩展标准化同时或之后确定的加密标准将由未来的 RISC-V 向量加密
+  标准扩展处理。
+  
+* 历史上，关于在通用计算中支持的新操作如何
+  可能启用新的加密算法基础，
+  曾有一些讨论
+  引用：[LSYRR:04]。
+  标准不会尝试预测可能对
+  未来加密构造有用的新低级操作。
+  
+* 关于侧信道对策：
+  在相关情况下，提议的指令必须旨在消除任何时间侧信道的可能性。所有指令
+  应以数据独立的时间实现。也就是说，这些指令的执行延迟不应因不同的输入值而变化。
+
+[[crypto-vector-element-groups]]
+==== 元素组
+
+许多向量加密指令操作的操作数比元素宽（目前限制为 64 位宽）。
+通常，这些操作数为 128 位和 256 位宽。在许多情况下，这些操作数由较小的操作数组成（例如，每个 SHA-2 操作数由 4 个字组成）。然而，在其他情况下，这些操作数是单个值（例如，在 AES 轮指令中，每个操作数是 128 位块或轮密钥）。
+
+我们将这些操作数视为一个或多个_元素组_的向量，如
+link:https://github.com/riscv/riscv-v-spec/blob/master/element_groups.adoc[RISC-V 向量元素组]
+规范中定义。
+
+每个操作元素组的向量加密指令明确指定它们的三个定义参数：EGW、EGS 和 EEW。
+
+[%autowidth]
+[%header,cols="4,4,4,4,4"]
+|===
+| 指令组
+| 扩展
+| EGW
+| EEW
+| EGS
+
+| AES      | <<zvkned>>            | 128 | 32 | 4
+| SHA256   | <<zvknh,zvknh[ab]>>  | 128 | 32 | 4
+| SHA512   | <<zvknh,zvknhb>>     | 256 | 64 | 4
+| GCM      | <<zvkg>>             | 128 | 32 | 4
+| SM4      | <<zvksed>>           | 128 | 32 | 4
+| SM3      | <<Zvksh>>            | 256 | 32 | 8
+|===
+
+[NOTE]
+====
+- 元素组宽度（`EGW`）- 元素组中的总位数
+- 有效元素宽度（`EEW`）- 每个元素的位数
+- 元素组大小（`EGS`）- 元素组中的元素数量
+====
+
+对于本规范中的所有向量加密指令，`EEW`=`SEW`。
+
+[NOTE]
+====
+为每个加密指令选择的 `SEW` 是为了匹配实现目标算法时通常需要的内容。
+====
+
+- *向量元素组* 是一个或多个元素组的向量。
+- *标量元素组* 是单个元素组。
+
+在实现 `VLEN`< `EGW` 的情况下，可以通过使用 `LMUL`>1 在寄存器之间形成元素组。
+
+[NOTE]
+====
+由于应用处理器的*向量扩展*要求 VLEN 最小为 128，
+在这种情况下，最多需要 LMUL=2 来形成本规范中最大的元素组。
+
+然而，具有较小 VLEN 的实现，例如嵌入式设计，将需要更大的 `LMUL`
+来形成必要的元素组。
+需要记住的是，这会减少可用的寄存器组数量，
+使得编写高效代码以实现预期的加密算法可能变得困难或不可能。
+
+例如，VLEN=32 的实现需要设置 `LMUL`=8 以创建
+256 位元素组用于 `SM3`。这意味着只有 4 个寄存器组，
+其中 3 个将被单个 `SM3` 消息扩展指令消耗。
+====
+
+与所有向量指令一样，处理的元素数量由
+向量长度 `vl` 指定。操作的元素组数量为 `vl`/`EGS`。
+同样，起始元素组为 `vstart`/`EGS`。
+有关向量加密指令的 `vl` 和 `vstart` 限制，请参见 <<crypto-vector-instruction-constraints>>。
+
+// 如果向量加密指令的此比率不是整数，则会引发非法指令异常。
+
+// 由于 `vstart` 以元素表示，起始元素组为 `vstart`/`EGS`。
+// 如果向量加密指令的此比率不是整数，则会引发非法指令异常。
+
+[[crypto-vector-instruction-constraints]]
+==== 指令约束
+以下是特定向量加密指令的各种约束的快速参考。
+
+vl 和 vstart 约束::
+由于 `vl` 和 `vstart` 指的是元素，使用元素组的向量加密指令
+（参见 <<crypto-vector-element-groups>>）要求这些值是
+元素组大小（`EGS`）的整数倍。
+
+- 违反 `vl` 或 `vstart` 要求的指令是_保留的_。
+
+[%autowidth]
+[%header,cols="4,4"]
+|===
+| 指令 
+| EGS
+
+| vaes*   | 4
+| vsha2*  | 4
+| vg*     | 4
+| vsm3*   | 8 
+| vsm4*   | 4
+
+|===
+
+LMUL 约束::
+对于元素组指令，`LMUL`*`VLEN` 必须始终至少与 `EGW` 一样大，否则会引发
+_非法指令异常_，即使 `vl`=0。
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+| 指令
+| SEW 
+| EGW
+
+| vaes*   | 32 | 128
+| vsha2*  | 32 | 128
+| vsha2*  | 64 | 256
+| vg*     | 32 | 128
+| vsm3*   | 32 | 256 
+| vsm4*   | 32 | 128
+
+|===
+
+
+SEW 约束::
+某些向量加密指令仅为特定 `SEW` 定义。在这种情况下，
+所有其他 `SEW` 值都是_保留的_。
+
+[%autowidth]
+[%header,cols="4,4"]
+|===
+| 指令 
+| 所需 SEW
+
+| vaes*          | 32
+| Zvknha: vsha2* | 32
+| Zvknhb: vsha2* | 32 或 64
+| vclmul[h]      | 64
+| vg*            | 32
+| vsm3*          | 32
+| vsm4*          | 32
+
+
+|===
+
+源/目标重叠约束::
+某些向量加密指令具有重叠约束。违反这些约束的编码是_保留的_。
+
+在本规范中定义的 `.vs` 指令的情况下，`vs2` 持有 128 位标量元素组。
+对于 `VLEN` ≥ 128 的实现，`vs2` 指的是单个寄存器。因此，`vd` 寄存器组不得
+与 `vs2` 寄存器重叠。
+然而，在 `VLEN` < 128 的实现中，`vs2` 指的是由
+需要容纳 128 位标量元素组的寄存器数量组成的寄存器组。在这种情况下，`vd` 寄存器组不得
+与此 `vs2` 寄存器组重叠。
+
+[%autowidth]
+[%header,cols="4,4,4"]
+|===
+| 指令
+| 寄存器 
+| 不能重叠
+
+| vaes*.vs      | vs2      | vd
+| vsm4r.vs      | vs2      | vd 
+| vsha2c[hl]    | vs1, vs2 | vd
+| vsha2ms       | vs1, vs2 | vd
+| vsm3me        | vs2      | vd
+| vsm3c         | vs2      | vd
+
+
+|===
+
+[[crypto-vector-scalar-instructions]]
+==== 向量-标量指令
+
+RISC-V 向量扩展定义了三种向量-标量操作的编码，这些操作从 GPR 或 FP 寄存器获取其标量操作数：
+
+- OPIVX：标量 GPR _x_ 寄存器
+- OPFVF：标量 FP _f_ 寄存器
+- OPMVX：标量 GPR _x_ 寄存器
+
+然而，向量扩展包括向量归约操作，这些操作也可以被视为向量-标量操作，因为标量操作数来自向量寄存器 `vs1` 的元素 0。向量操作数在向量寄存器组 `vs2` 中提供。这些归约操作在其助记符中都使用 `.vs` 后缀。此外，归约操作在目标寄存器 `vd` 的元素 0 中生成标量结果。
+
+向量加密扩展定义了类似于这些向量归约操作的向量-标量指令，因为它们从向量寄存器获取标量操作数。然而，它们的不同之处在于它们从 `vs2` 获取标量元素组（参见 <<crypto-vector-element-groups>>），并将 _向量_ 结果返回到 `vd`，`vd` 也是一个源向量操作数。这些向量-标量加密指令在其助记符中也使用 `.vs` 后缀。
+
+[NOTE]
+====
+我们选择使用 `vs2` 作为标量操作数，`vd` 作为向量操作数，以便我们可以使用 `vs1` 说明符作为这些指令的附加编码位。这使得这些指令具有更小的编码占用空间，为未来的其他指令留出更多空间。
+====
+
+这些指令使得可以将单个密钥（在 `vs2` 中指定为标量元素组）应用于寄存器组 `vd` 的每个元素组。
+
+[NOTE]
+====
+在应用处理器中，标量元素组最多占用一个寄存器。然而，在 VLEN<128 的实现中，它们将占用 2（VLEN=64）或 4（VLEN=32）个寄存器。
+====
+
+[NOTE]
+====
+通常会并行执行多个 AES 加密轮次（例如，在计数器模式中）使用相同的轮密钥。与其先将公共密钥扩展到整个向量组，不如使用这些向量-标量加密指令将轮密钥指定为标量元素组。
+====
+
+[[crypto-vector-software-portability]]
+==== 软件可移植性
+
+以下内容包含一些指南，以确保基于向量加密的代码在具有不同 `VLEN` 值的实现中具有可移植性。
+
+应用处理器::
+应用处理器预计将遵循 V 扩展，因此 `VLEN` ≥ 128。
+
+[NOTE]
+====
+由于大多数 _特定于加密的_ 指令的 `EGW`=128，因此这些指令无需做任何特殊处理即可支持 `VLEN`=128 的实现。
+
+然而，SHA-512 和 SM3 指令的 `EGW`=256。对于 `VLEN` = 128 的实现，需要将 `LMUL` 加倍，以便在一对寄存器中创建 256 位元素。编写使用这种 `LMUL` 加倍的代码不会影响 `VLEN` ≥ 256 的实现返回的结果，因为 `vl` 控制处理的元素组数量。因此，我们建议实现 SHA-512 和 SM3 的库采用这种 `LMUL` 加倍，以确保软件可以在所有 `VLEN` ≥ 128 的实现上运行。
+
+虽然这些指令的 `LMUL` 加倍对于 `VLEN` ≥ 256 的实现是 _安全的_，但它可能不太优化，因为它会导致不必要的寄存器压力，并可能在某些微架构中带来性能损失。因此，我们建议库在提供 SHA-512 和 SM3 的可移植代码的同时，也为 `VLEN` ≥ 256 的实现提供更优化的代码。
+====
+
+[%autowidth]
+[%header,cols="4,4,4,4"]
+|===
+| 算法
+| 指令
+| VLEN
+| LMUL
+
+| SHA-512 |  vsha2* | 64 | vl/2
+| SM3     | vsm3*   | 32 | vl/4 
+|===
+
+[NOTE]
+====
+我们建议所有应用处理器的库代码都编写为可以在任何 `VLEN` ≥ 128 的实现上运行。这样的库也鼓励为 `VLEN` ≥ 256 的实现提供 SHA-512 和 SM3 的优化代码。
+====
+
+嵌入式处理器::
+
+嵌入式处理器通常具有 `VLEN` < 128 的实现。这将需要编写具有更大 `LMUL` 值的代码，以便形成元素组。
+
+`.vs` 指令需要 `EGW`=128 的标量元素组。在 `VLEN` < 128 的实现中，这些标量元素组将跨寄存器形成。这与大多数向量指令中的标量不同，后者通常消耗单个寄存器的一部分。
+
+[NOTE]
+====
+我们建议为 `VLEN`=32 和 `VLEN`=64 提供不同的代码，因为为 `VLEN`=32 编写的代码可能对 `VLEN`=64 的实现来说过于繁重。
+====
+
+[[crypto_vector_extensions]]
+=== 扩展概述
+
+本节介绍了向量加密指令集扩展规范中的所有扩展。
+
+<<zvknh,Zvknhb>> 和 <<zvbc>> 向量加密扩展——以及相应的复合扩展 <<Zvkn>> 和 <<Zvks>>——需要 Zve64x 基础或应用 ("V") 基础向量扩展。
+
+所有其他向量加密扩展可以建立在 _任何_ 嵌入式 (Zve*) 或应用 ("V") 基础向量扩展之上。
+
+所有在本向量加密规范中定义的 _特定于加密的_ 指令（即，<<zvkned>>、<<zvknh,Zvknh[ab]>>、<<Zvkg>>、<<Zvksed>> 和 <<zvksh>>，但不包括 <<zvbb>>、<<zvkb>> 或 <<zvbc>>）应以数据独立的执行延迟执行，如 link:https://github.com/riscv/riscv-crypto/releases/tag/v1.0.1-scalar[RISC-V 标量加密扩展规范] 中定义。需要注意的是，向量加密指令独立于 `Zkt` 扩展的实现，不要求实现 `Zkt`。
+
+本规范包括一个 <<Zvkt>> 扩展，当实现时，要求某些向量指令（包括 <<zvbb>>、<<zvkb>> 和 <<zvbc>>）以数据独立的执行延迟执行。
+
+检测单个加密扩展使用统一的软件 RISC-V 发现方法。
+
+[NOTE]
+====
+在撰写本文时，这些发现机制仍在进行中。
+====
+
+[[zvbb,Zvbb]]
+==== `Zvbb` - 向量基本位操作
+
+向量基本位操作指令。
+
+[NOTE]
+====
+此扩展是 <<Zvkb>> 扩展的超集。
+====
+
+[%autowidth]
+[%header,cols="2,4"]
+|===
+| 助记符
+| 指令
+
+| vandn.[vv,vx]      | <<insns-vandn>>
+| vbrev.v            | <<insns-vbrev>>
+| vbrev8.v           | <<insns-vbrev8>>
+| vrev8.v            | <<insns-vrev8>>
+| vclz.v             | <<insns-vclz>>
+| vctz.v             | <<insns-vctz>>
+| vcpop.v            | <<insns-vcpop>>
+| vrol.[vv,vx]       | <<insns-vrol>>
+| vror.[vv,vx,vi]    | <<insns-vror>>
+| vwsll.[vv,vx,vi]   | <<insns-vwsll>>
+
+|===
+
+<<<
+
+[[zvbc,Zvbc]]
+==== `Zvbc` - 向量无进位乘法
+
+通用无进位乘法指令，通常用于加密和哈希（例如，椭圆曲线加密、GHASH、CRC）。
+
+这些指令仅为 `SEW`=64 定义。
+
+[%autowidth]
+[%header,cols="^2,4"]
+|===
+| 助记符
+| 指令
+| vclmul.[vv,vx]     | <<insns-vclmul>>
+| vclmulh.[vv,vx]    | <<insns-vclmulh>>
+
+|===
+
+<<<
+
+[[zvkb,Zvkb]]
+==== `Zvkb` - 向量加密位操作
+
+向量位操作指令，对于安全高效地实现常见的加密工作负载至关重要。
+
+[NOTE]
+====
+此 Zvkb 扩展是 Zvbb 扩展的适当子集。Zvkb 允许向量加密实现而无需承担实现 Zvbb 扩展中额外位操作指令的成本：vbrev.v、vclz.v、vctz.v、vcpop.v 和 vwsll.[vv,vx,vi]。
+====
+
+[%autowidth]
+[%header,cols="2,4"]
+|===
+| 助记符
+| 指令
+
+| vandn.[vv,vx]      | <<insns-vandn>>
+// | vbrev.v            | <<insns-vbrev>>
+| vbrev8.v           | <<insns-vbrev8>>
+| vrev8.v            | <<insns-vrev8>>
+// | vclz.v             | <<insns-vclz>>
+// | vctz.v             | <<insns-vctz>>
+// | vcpop.v            | <<insns-vcpop>>
+| vrol.[vv,vx]       | <<insns-vrol>>
+| vror.[vv,vx,vi]    | <<insns-vror>>
+// | vwsll.[vv,vx,vi]   | <<insns-vwsll>>
+|===
+
+<<<
+
+[[zvkg,Zvkg]]
+==== `Zvkg` - 向量 GCM/GMAC
+
+指令用于高效实现 GHASH~H~，该算法用于 Galois/Counter Mode (GCM) 和 Galois Message Authentication Code (GMAC)。
+
+所有这些指令都在由四个 32 位元素组成的 128 位元素组上工作。
+
+GHASH~H~ 在 link:https://csrc.nist.gov/publications/detail/sp/800-38d/final[NIST Special Publication 800-38D] "Recommendation for Block Cipher Modes of Operation: Galois/Counter Mode (GCM) and GMAC" cite:[nist:gcm] (NIST 规范) 中定义。
+
+[NOTE]
+====
+GCM 与块密码（例如 AES 和 SM4）结合使用，以加密消息并提供认证。GMAC 用于在不加密的情况下提供消息认证。
+====
+
+为了避免侧信道定时攻击，这些指令应以数据独立的时间实现。
+
+处理的元素组数量为 `vl`/`EGS`。`vl` 必须设置为要处理的 `SEW=32` 元素的数量，因此必须是 `EGS=4` 的倍数。+
+同样，`vstart` 必须是 `EGS=4` 的倍数。
+
+[%autowidth]
+[%header,cols="^2,4,4,4"]
+|===
+
+|SEW
+|EGW
+|助记符
+|指令
+| 32 | 128 | vghsh.vv | <<insns-vghsh>>
+| 32 | 128 | vgmul.vv | <<insns-vgmul>>
+
+|===
+
+<<<
+
+[[zvkned,Zvkned]]
+==== `Zvkned` - NIST 套件：向量 AES 块密码
+
+用于加速 AES 块密码的加密、解密和密钥调度功能的指令，如
+联邦信息处理标准出版物 197 中定义的
+cite:[nist:fips:197]
+
+所有这些指令都在由四个 32 位元素组成的 128 位元素组上工作。
+
+为了获得最佳性能，建议在 `VLEN`>=128 的系统上实现这些指令。
+在 `VLEN`<128 的系统上，可以通过使用 LMUL =2 和 LMUL=4 分别将两个或四个寄存器的 32 位元素连接起来形成元素组。
+
+// 对于 `VLEN<128` 的实现，应考虑现有的
+// 标量加密扩展，特别是 <<Zkne,Zkne>> 和 <<Zknd,Zknd>>
+// 用于加速加密操作。
+
+为了帮助避免侧信道定时攻击，这些指令应以数据独立的时间实现。
+
+处理的元素组数量为 `vl`/`EGS`。
+`vl` 必须设置为要处理的 `SEW=32` 元素的数量，因此必须是 `EGS=4` 的倍数。+
+同样，`vstart` 必须是 `EGS=4` 的倍数。
+
+[%autowidth]
+[%header,cols="^2,4,4,4"]
+|===
+|SEW
+|EGW
+|助记符
+|指令
+
+| 32| 128 | vaesef.[vv,vs]  | <<insns-vaesef>>
+| 32| 128 | vaesem.[vv,vs]  | <<insns-vaesem>>
+| 32| 128 | vaesdf.[vv,vs]  | <<insns-vaesdf>>
+| 32| 128 | vaesdm.[vv,vs]  | <<insns-vaesdm>>
+| 32| 128 | vaeskf1.vi      | <<insns-vaeskf1>>
+| 32| 128 | vaeskf2.vi      | <<insns-vaeskf2>>
+| 32| 128 | vaesz.vs        | <<insns-vaesz>>
+|===
+
+<<<
+
+[[zvknh, zvknh[ab]]]
+==== `Zvknh[ab]` - NIST 套件：向量 SHA-2 安全哈希
+
+用于加速 SHA-2 的指令，如 FIPS PUB 180-4 安全哈希标准 (SHS) 中定义的
+cite:[nist:fips:180:4]
+
+`SEW` 区分 SHA-256 (`SEW`=32) 和 SHA-512 (`SEW`=64)。
+
+- SHA-256：这些指令在由四个 32 位元素组成的 128 位元素组上工作。
+- SHA-512：这些指令在由四个 64 位元素组成的 256 位元素组上工作。
+
+[%autowidth]
+[%header,cols="^2,^2,^2,2"]
+|===
+|SEW
+|EGW
+|SHA-2
+|扩展
+
+|32 | 128 | SHA-256 | Zvknha, Zvknhb
+|64 | 256 | SHA-512 | Zvknhb
+|===
+
+// link:https://doi.org/10.6028/NIST.FIPS.180-4[FIPS PUB 180-4 安全哈希标准 (SHS)]
+
+- Zvknhb 支持 SHA-256 和 SHA-512。
+- Zvknha 仅支持 SHA-256。
+
+// [NOTE]
+// ====
+// 如果实现了 Zvknhb，`SEW` 用于区分 SHA-256 (SEW=32) 和 SHA-512 (SEW=64)。
+// 如果实现了 Zvknha，仅支持 SHA-256，并且 SEW 必须是 32。
+// ====
+
+VLEN < 128 的 SHA-256 实现需要 LMUL>1 来组合寄存器组中的 32 位元素以提供元素组的所有四个元素。
+
+VLEN < 256 的 SHA-512 实现需要 LMUL>1 来组合寄存器组中的 64 位元素以提供元素组的所有四个元素。
+
+// SHA-2 定义在
+// link:https://doi.org/10.6028/NIST.FIPS.180-4[FIPS PUB 180-4 安全哈希标准 (SHS)]。
+
+为了帮助避免侧信道定时攻击，这些指令应以数据独立的时间实现。
+
+// [NOTE]
+// ====
+// 建议这些指令的实现具有 VLEN≥128。
+// // 此外，为了在 SHA512 中获得最佳性能，建议这些指令的实现具有 VLEN≥256。
+// 当 VLEN<EGW 时，软件需要使用适当的 LMUL，以便从指定的寄存器组中组合元素以形成完整的元素组。
+// ====
+
+处理的元素组数量为 `vl`/`EGS`。
+`vl` 必须设置为要处理的 `SEW` 元素的数量，因此必须是 `EGS=4` 的倍数。+
+同样，`vstart` 必须是 `EGS=4` 的倍数。
+
+[%autowidth]
+[%header,cols="2,4"]
+|===
+// |`VLENmin`
+|助记符
+|指令
+
+// | 128
+| vsha2ms.vv   | <<insns-vsha2ms>>
+// | 128
+| vsha2c[hl].vv    | <<insns-vsha2c>>
+|===
+
+<<<
+
+[[zvksed,Zvksed]]
+==== `Zvksed` - ShangMi 套件：SM4 块密码
+
+用于加速 SM4 块密码的加密、解密和密钥调度功能的指令。
+
+SM4 块密码在 _32907-2016: {SM4} 块密码算法_ 中指定
+cite:[gbt:sm4]
+
+还有其他各种描述 SM4 块密码的资源。
+虽然不是标准的最终版本，
+link:https://www.rfc-editor.org/rfc/rfc8998.html[RFC 8998 ShangMi (SM) 密码套件用于 TLS 1.3]
+是有用且易于访问的。
+
+// https://datatracker.ietf.org/doc/id/draft-crypto-sm4-00
+
+所有这些指令都在由四个 32 位元素组成的 128 位元素组上工作。
+
+// 实现 `VLEN<128` 的系统应考虑现有的
+// 标量加密扩展，特别是 <<Zkne,Zkne>> 和 <<Zknd,Zknd>>
+// 用于加速加密操作。
+
+为了帮助避免侧信道定时攻击，这些指令应以数据独立的时间实现。
+
+处理的元素组数量为 `vl`/`EGS`。
+`vl` 必须设置为要处理的 `SEW=32` 元素的数量，因此必须是 `EGS=4` 的倍数。+
+同样，`vstart` 必须是 `EGS=4` 的倍数。
+
+[%autowidth]
+[%header,cols="^2,4,4,4"]
+|===
+|SEW
+|EGW
+|助记符
+|指令
+
+| 32 | 128 | vsm4k.vi        | <<insns-vsm4k>>
+| 32 | 128 | vsm4r.[vv,vs]   | <<insns-vsm4r>>
+|===
+
+<<<
+
+[[zvksh,Zvksh]]
+==== `Zvksh` - ShangMi 套件：SM3 安全哈希
+
+用于加速 SM3 哈希函数功能的指令。
+
+SM3 安全哈希算法在 _32905-2016: SM3 加密哈希算法_ 中指定
+cite:[gbt:sm4]
+
+还有其他各种描述 SM3 安全哈希的资源。
+虽然不是标准的最终版本，
+link:https://www.rfc-editor.org/rfc/rfc8998.html[RFC 8998 ShangMi (SM) 密码套件用于 TLS 1.3]
+是有用且易于访问的。
+
+// https://datatracker.ietf.org/doc/id/draft-crypto-sm4-00
+
+所有这些指令都在由八个 32 位元素组成的 256 位元素组上工作。
+
+VLEN < 256 的实现需要 LMUL>1 来组合寄存器组中的 32 位元素以提供元素组的所有八个元素。
+
+// 这些指令在 `VLEN`≥256 的实现上最有效。
+// 它们还将在 `VLEN`=128 的实现上提供实质性好处，但需要 `LMUL`>1 以便在寄存器组内组合元素以形成完整的元素组。
+// `VLEN`<128 的实现可能不太高效，应考虑现有的
+// 标量加密扩展，特别是 `Zkne` 和 `Zknd`，
+// 用于加速加密操作。
+
+为了帮助避免侧信道定时攻击，这些指令应以数据独立的时间实现。
+
+处理的元素组数量为 `vl`/`EGS`。
+`vl` 必须设置为要处理的 `SEW=32` 元素的数量，因此必须是 `EGS=8` 的倍数。+
+同样，`vstart` 必须是 `EGS=8` 的倍数。
+
+[%autowidth]
+[%header,cols="2,4,4,4"]
+|===
+| SEW
+| EGW
+| 助记符
+| 指令
+
+| 32 | 256 | vsm3me.vv | <<insns-vsm3me>>
+| 32 | 256 | vsm3c.vi   | <<insns-vsm3c>>
+|===
+
+<<<
+
+[[zvkn,Zvkn]]
+==== `Zvkn` - NIST 算法套件
+
+此扩展是以下其他扩展的简写：
+
+[%autowidth]
+[%header,cols="^2,4"]
+|===
+|包含的扩展
+|描述
+
+
+| Zvkned  | <<Zvkned>>
+| Zvknhb  | <<zvknh,Zvknhb>>
+// | Zvbb    | <<Zvbb>>
+| Zvkb    | <<Zvkb>>
+// | Zvbc    | <<Zvbc>>
+| Zvkt    | <<Zvkt>>
+|===
+
+[NOTE]
+====
+虽然 Zvkg 和 Zvbc 不是此扩展的一部分，但建议至少实现其中之一，以便与此扩展一起实现高效的 AES-GCM。
+====
+
+<<<
+
+[[zvknc,Zvknc]]
+==== `Zvknc` - 带无进位乘法的 NIST 算法套件
+
+此扩展是以下其他扩展的简写：
+
+[%autowidth]
+[%header,cols="^2,4"]
+|===
+|包含的扩展
+|描述
+
+
+| Zvkn  | <<Zvkn>>
+| Zvbc  | <<Zvbc>>
+|===
+
+[NOTE]
+====
+此扩展将 NIST 算法套件与
+向量无进位乘法扩展结合，以实现 AES-GCM。
+====
+
+<<<
+
+[[zvkng,Zvkng]]
+==== `Zvkng` - 带 GCM 的 NIST 算法套件
+
+此扩展是以下其他扩展的简写：
+
+[%autowidth]
+[%header,cols="^2,4"]
+|===
+|包含的扩展
+|描述
+
+
+| Zvkn  | <<Zvkn>>
+| Zvkg  | <<Zvkg>>
+|===
+
+[NOTE]
+====
+此扩展将 NIST 算法套件与
+GCM/GMAC 扩展结合，以实现高性能的 AES-GCM。
+====
+
+<<<
+
+[[zvks,Zvks]]
+==== `Zvks` - ShangMi 算法套件
+
+此扩展是以下其他扩展的简写：
+
+[%autowidth]
+[%header,cols="^2,4"]
+|===
+|包含的扩展
+|描述
+
+
+| Zvksed  | <<Zvksed>>
+| Zvksh   | <<Zvksh>>
+// | Zvbb    | <<Zvbb>>
+| Zvkb    | <<Zvkb>>
+// | Zvbc    | <<Zvbc>>
+| Zvkt    | <<Zvkt>>
+|===
+
+[NOTE]
+====
+虽然 Zvkg 和 Zvbc 不是此扩展的一部分，但建议至少实现其中之一，以便与此扩展一起实现高效的 SM4-GCM。
+====
+
+<<<
+
+[[zvksc,Zvksc]]
+==== `Zvksc` - 带无进位乘法的 ShangMi 算法套件
+
+此扩展是以下其他扩展的简写：
+
+[%autowidth]
+[%header,cols="^2,4"]
+|===
+|包含的扩展
+|描述
+
+
+| Zvks  | <<Zvks>>
+| Zvbc  | <<Zvbc>>
+|===
+
+[NOTE]
+====
+此扩展将 ShangMi 算法套件与
+向量无进位乘法扩展结合，以实现 SM4-GCM。
+====
+
+<<<
+
+[[zvksg,Zvksg]]
+==== `Zvksg` - 带 GCM 的 ShangMi 算法套件
+
+此扩展是以下其他扩展的简写：
+
+[%autowidth]
+[%header,cols="^2,4"]
+|===
+|包含的扩展
+|描述
+
+
+| Zvks  | <<Zvks>>
+| Zvkg  | <<Zvkg>>
+|===
+
+[NOTE]
+====
+此扩展将 ShangMi 算法套件与
+GCM/GMAC 扩展结合，以实现高性能的 SM4-GCM。
+====
+
+<<<
+
+[[zvkt,Zvkt]]
+==== `Zvkt` - 向量数据独立执行延迟
+
+Zvkt 扩展要求以下列表中的所有已实现指令都必须按照
+link:https://github.com/riscv/riscv-crypto/releases/tag/v1.0.1-scalar[RISC-V 标量加密扩展规范] 中定义的
+数据独立执行延迟 (DIEL) 执行。
+
+数据独立执行延迟 (DIEL) 适用于指令的所有_数据操作数_，即使它们不在主体中或处于非活动状态。
+然而，DIEL 不适用于其他值，例如 vl、vtype 和掩码（用于控制掩码向量指令的执行时）。
+此外，DIEL 不适用于指令编码中指定的常量值，例如使用零寄存器 (`x0`)，以及在指令的立即数形式中，立即数字段中的值（即 imm 和 uimm）。
+
+在某些情况下——这些情况在下面的列表中明确指定——用作控制而不是数据的操作数不受 DIEL 约束。
+
+[NOTE]
+====
+DIEL 有助于防止侧信道定时攻击，这些攻击用于确定应保密的数据值。
+这些值包括加密密钥、明文和部分加密的文本。
+DIEL 并不打算保密软件（以及其中包含的加密算法），因为假设对手已经知道这些。
+这就是为什么 DIEL 不适用于指令编码中嵌入的常量。
+
+重要的是，未在主体中或被掩码掉的元素的_值_不会影响指令的执行延迟。
+有时这些元素包含也需要保密的数据。
+====
+
+===== 所有 <<Zvbb>> 指令
+- vandn.v[vx]
+- vclz.v
+- vcpop.v
+- vctz.v
+- vbrev.v
+- vbrev8.v
+- vrev8.v
+- vrol.v[vx]
+- vror.v[vxi]
+- vwsll.[vv,vx,vi]
+
+[NOTE]
+====
+所有 <<Zvkb>> 指令也受 DIEL 约束，因为它们是 <<Zvbb>> 的适当子集。
+====
+
+===== 所有 <<Zvbc>> 指令
+- vclmul[h].v[vx]
+
+===== 加/减
+- v[r]sub.v[vx]
+- vadd.v[ivx]
+- vsub.v[vx]
+- vwadd[u].[vw][vx]
+- vwsub[u].[vw][vx]
+
+===== 带进位的加/减
+- vadc.v[ivx]m
+- vmadc.v[ivx][m]
+- vmsbc.v[vx]m
+- vsbc.v[vx]m
+
+===== 比较和设置
+- vmseq.v[vxi]
+- vmsgt[u].v[xi]
+- vmsle[u].v[xi]
+- vmslt[u].v[xi]
+- vmsne.v[ivx]
+
+===== 复制
+- vmv.s.x
+- vmv.v.[ivxs]
+- vmv[1248]r.v
+
+===== 扩展
+- vsext.vf[248]
+- vzext.vf[248]
+
+===== 逻辑
+- vand.v[ivx]
+- vm[n]or.mm
+- vmand[n].mm
+- vmnand.mm
+- vmorn.mm
+- vmx[n]or.mm
+- vor.v[ivx]
+- vxor.v[ivx]
+
+===== 乘法
+- vmul[h].v[vx]
+- vmulh[s]u.v[vx]
+- vwmul.v[vx]
+- vwmul[s]u.v[vx]
+
+===== 乘加
+- vmacc.v[vx]
+- vmadd.v[vx]
+- vnmsac.v[vx]
+- vnmsub.v[vx]
+- vwmacc.v[vx]
+- vwmacc[s]u.v[vx]
+- vwmaccus.vx
+
+===== 整数合并
+- vmerge.v[ivx]m
+
+===== 置换
+在 `vragather[ei16]` 指令的 `.vv` 和 `.xv` 形式中，`vs1` 和 `rs1` 中的值用作控制，因此不受 DIEL 约束。
+
+- vrgather.v[ivx]
+- vrgatherei16.vv
+
+===== 移位
+// `vs1`、`rs1`、`imm` 中的值用作控制（即移位量），因此不受 DIEL 约束。
+
+- vnsr[al].w[ivx]
+- vsll.v[ivx]
+- vsr[al].v[ivx]
+
+===== 滑动
+- vslide1[up|down].vx
+- vfslide1[up|down].vf
+
+在 vslide[up|down].vx 指令中，`rs1` 中的值用作控制（即滑动量），因此不受 DIEL 约束。
+
+- vslide[up|down].v[ix]
+
+[NOTE]
+====
+以下指令不受 Zvkt 影响：
+ 
+- *所有存储操作*
+- *所有浮点操作*
+- 饱和加/减
+* vsadd[u].v[ivx]
+* vssub[u].v[vx]
+- 裁剪
+* vnclip[u].w[ivx]
+- 压缩
+* vcompress.vm
+- 除法
+* vdiv[u].v[vx]
+* vrem[u].v[vx]
+- 平均
+* vaadd[u].v[vx]
+* vasub[u].v[vx]
+- 掩码操作
+* vcpop.m
+* vfirst.m
+* vid.v
+* viota.m
+* vms[bio]f.m
+- 最小/最大
+* vmax[u].v[vx]
+* vmin[u].v[vx]
+- 乘法饱和
+* vsmul.v[vx]
+- 归约
+* vredsum.vs
+* vwredsum[u].vs
+* vred[and|or|xor].vs
+* vred[min|max][u].vs
+- 移位舍入
+* vssra.v[ivx]
+* vssrl.v[ivx]
+- vset
+* vsetivli
+* vsetvl[i]
+====
+
+[[crypto_vector_insns, reftext="向量加密指令"]]
+=== 指令
+
+[[insns-vaesdf, 向量 AES 解密最终轮]]
+==== vaesdf.[vv,vs]
+
+概要::
+向量 AES 最终轮解密
+
+助记符::
+vaesdf.vv vd, vs2 + 
+vaesdf.vs vd, vs2
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00001'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101000'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00001'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101001`'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+* 仅适用于 `.vs` 形式：`vd` 寄存器组与 `vs2` 标量元素组重叠
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS 
+|EEW
+|定义
+
+| Vd  | 输入  | 128  | 4 | 32 | 轮状态
+| Vs2 | 输入  | 128  | 4 | 32 | 轮密钥
+| Vd  | 输出 | 128  | 4 | 32 | 新轮状态
+|===
+
+描述::
+执行 AES 块密码的最终轮解密。
+
+对 `vd` 中的每个轮状态元素组应用 InvShiftRows 和 InvSubBytes 步骤。
+然后将其与 `vs2` 中相应元素组（向量-向量形式）或 `vs2` 中的标量元素组（向量-标量形式）中的轮密钥进行异或。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+//  if( ((vl%EGS)<>0) | ((vstart%EGS)<>0) | (LMUL*VLEN < EGW))  then {
+
+操作::
+[source,sail]
+--
+function clause execute (VAESDF(vs2, vd, suffix)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+
+  foreach (i from eg_start to eg_len-1) {
+    let keyelem = if suffix == "vv" then i else 0;
+    let state : bits(128) = get_velem(vd,  EGW=128, i);
+    let rkey  : bits(128) = get_velem(vs2, EGW=128, keyelem);
+    let sr    : bits(128) = aes_shift_rows_inv(state);
+    let sb    : bits(128) = aes_subbytes_inv(sr);
+    let ark   : bits(128) = sb ^ rkey;
+    set_velem(vd, EGW=128, i, ark);
+  }
+  RETIRE_SUCCESS
+  }
+}
+--
+
+包含于::
+<<zvkn>>, <<zvknc>>, <<zvkned>>, <<zvkng>>
+
+<<<
+
+[[insns-vaesdm, Vector AES decrypt middle round]]
+==== vaesdm.[vv,vs]
+
+概要::
+向量 AES 中间轮解密
+
+助记符::
+vaesdm.vv vd, vs2 +
+vaesdm.vs vd, vs2
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00000'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101000'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00000'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101001'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+* 仅适用于 `.vs` 形式：`vd` 寄存器组与 `vs2` 标量元素组重叠
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS 
+|EEW
+|定义
+
+| Vd  | 输入  | 128  | 4 | 32 | 轮状态
+| Vs2 | 输入  | 128  | 4 | 32 | 轮密钥
+| Vd  | 输出 | 128  | 4 | 32 | 新轮状态
+|===
+
+描述::
+执行 AES 块密码的中间轮解密。
+
+对 `vd` 中的每个轮状态元素组应用 InvShiftRows 和 InvSubBytes 步骤。
+然后将其与 `vs2` 中相应元素组（向量-向量形式）或 `vs2` 中的标量元素组（向量-标量形式）中的轮密钥进行异或。结果然后应用于 InvMixColumns 步骤。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+操作::
+[source,sail]
+--
+function clause execute (VAESDM(vs2, vd, suffix)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+
+  foreach (i from eg_start to eg_len-1) {
+    let keyelem = if suffix == "vv" then i else 0;
+    let state : bits(128) = get_velem(vd, EGW=128, i);
+    let rkey  : bits(128) = get_velem(vs2, EGW=128, keyelem);
+    let sr    : bits(128) = aes_shift_rows_inv(state);
+    let sb    : bits(128) = aes_subbytes_inv(sr);
+    let ark   : bits(128) = sb ^ rkey;
+    let mix   : bits(128) = aes_mixcolumns_inv(ark);
+    set_velem(vd, EGW=128, i, mix);
+  }
+  RETIRE_SUCCESS
+  }
+}
+--
+
+包含于::
+<<zvkn>>, <<zvknc>>, <<zvkned>>, <<zvkng>>
+
+<<<
+
+[[insns-vaesef, Vector AES encrypt final round]]
+==== vaesef.[vv,vs]
+
+概要::
+向量 AES 最终轮加密
+
+助记符::
+vaesef.vv vd, vs2 +
+vaesef.vs vd, vs2
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00011'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101000'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00011'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101001'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+* 仅适用于 `.vs` 形式：`vd` 寄存器组与 `vs2` 标量元素组重叠
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS 
+|EEW
+|定义
+
+| vd  | 输入  | 128  | 4 | 32 | 轮状态
+| vs2 | 输入  | 128  | 4 | 32 | 轮密钥 
+| vd  | 输出 | 128  | 4 | 32 | 新轮状态
+|===
+
+描述:: 
+执行 AES 块密码的最终轮加密。
+
+对 `vd` 中的每个轮状态元素组应用 SubBytes 和 ShiftRows 步骤。
+然后将其与 `vs2` 中相应元素组（向量-向量形式）或 `vs2` 中的标量元素组（向量-标量形式）中的轮密钥进行异或。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+操作::
+[source,sail]
+--
+function clause execute (VAESEF(vs2, vd, suffix) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  foreach (i from eg_start to eg_len-1) {
+    let keyelem = if suffix == "vv" then i else 0;
+    let state : bits(128) = get_velem(vd, EGW=128, i);
+    let rkey  : bits(128) = get_velem(vs2, EGW=128, keyelem);
+    let sb    : bits(128) = aes_subbytes_fwd(state);
+    let sr    : bits(128) = aes_shift_rows_fwd(sb);
+    let ark   : bits(128) = sr ^ rkey;
+    set_velem(vd, EGW=128, i, ark);
+  }
+  RETIRE_SUCCESS
+  }
+}
+--
+
+包含于::
+<<zvkn>>, <<zvknc>>, <<zvkned>>, <<zvkng>>
+
+<<<
+
+[[insns-vaesem, Vector AES encrypt middle round]]
+==== vaesem.[vv,vs]
+
+概要::
+向量 AES 中间轮加密
+
+助记符::
+vaesem.vv vd, vs2 +
+vaesem.vs vd, vs2
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00010'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101000'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00010'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101001'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+* 仅适用于 `.vs` 形式：`vd` 寄存器组与 `vs2` 标量元素组重叠
+
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS 
+|EEW
+|定义
+
+| Vd  | 输入  | 128  | 4 | 32 | 轮状态
+| Vs2 | 输入  | 128  | 4 | 32 | 轮密钥
+| Vd  | 输出 | 128  | 4 | 32 | 新轮状态
+|===
+
+描述::
+执行 AES 块密码的中间轮加密。
+
+对 `vd` 中的每个轮状态元素组应用 SubBytes、ShiftRows 和 MixColumns 步骤。
+然后将其与 `vs2` 中相应元素组（向量-向量形式）或 `vs2` 中的标量元素组（向量-标量形式）中的轮密钥进行异或。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+操作::
+[source,sail]
+--
+function clause execute (VAESEM(vs2, vd, suffix)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  foreach (i from eg_start to eg_len-1) {
+    let keyelem = if suffix == "vv" then i else 0;
+    let state : bits(128) = get_velem(vd, EGW=128, i);
+    let rkey  : bits(128) = get_velem(vs2, EGW=128, keyelem);
+    let sb    : bits(128) = aes_subbytes_fwd(state);
+    let sr    : bits(128) = aes_shift_rows_fwd(sb);
+    let mix   : bits(128) = aes_mixcolumns_fwd(sr);
+    let ark   : bits(128) = mix ^ rkey;
+    set_velem(vd, EGW=128, i, ark);
+  }
+  RETIRE_SUCCESS
+  }
+}
+--
+
+包含于::
+<<zvkn>>, <<zvknc>>, <<zvkned>>, <<zvkng>>
+
+<<<
+
+[[insns-vaeskf1, Vector AES-128 Forward KeySchedule]]
+==== vaeskf1.vi
+
+概要::
+向量 AES-128 前向密钥调度生成
+
+助记符::
+vaeskf1.vi vd, vs2, uimm
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'uimm'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '100010'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS 
+|EEW
+|定义
+
+| uimm | 输入  | -    | - | -  | 轮数 (rnd)
+| Vs2  | 输入  | 128  | 4 | 32 | 当前轮密钥
+| Vd   | 输出 | 128  | 4 | 32 | 下一轮密钥
+|===
+
+Description:: 
+执行 AES-128 密钥调度的单轮操作。
+
+在每个元素组内，从 `vs2` 中的当前轮密钥元素组和前一轮密钥的前一个字生成下一个轮密钥。最不重要的字是使用当前轮密钥的最重要字以及由轮数选择的轮常数生成的。
+
+轮数范围为 1 到 10，来自 `uimm[3:0]`；`uimm[4]` 被忽略。0 和 11-15 的超出范围的 `uimm[3:0]` 值通过反转 `uimm[3]` 映射到范围内的值。因此，0 映射到 8，11-15 映射到 3-7。轮数用于指定用于生成第一个轮密钥字的轮常数。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+[NOTE]
+====
+我们选择将超出范围的轮数映射到范围内的值，因为这允许指令的行为对所有 `uimm[4:0]` 值完全定义，并且需要最少的额外逻辑。
+====
+
+操作::
+[source,Sail]
+--
+function clause execute (VAESKF1(rnd, vd, vs2)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+ // 将超出范围的立即数投影到范围内的值
+ if( (unsigned(rnd[3:0]) > 10) | (rnd[3:0] = 0)) then rnd[3] = ~rnd[3]
+ 
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+
+  let r : bits(4) = rnd-1;
+
+  foreach (i from eg_start to eg_len-1) {
+      let CurrentRoundKey[3:0]  : bits(128)  = get_velem(vs2, EGW=128, i);
+      let w[0] : bits(32) = aes_subword_fwd(aes_rotword(CurrentRoundKey[3])) XOR
+        aes_decode_rcon(r) XOR CurrentRoundKey[0]
+      let w[1] : bits(32) = w[0] XOR CurrentRoundKey[1]
+      let w[2] : bits(32) = w[1] XOR CurrentRoundKey[2]
+      let w[3] : bits(32) = w[2] XOR CurrentRoundKey[3]
+      set_velem(vd, EGW=128, i, w[3:0]);
+    }
+    RETIRE_SUCCESS
+  }
+}
+
+--
+
+包含于::
+<<zvkn>>, <<zvknc>>, <<zvkned>>, <<zvkng>>
+
+<<<
+
+[[insns-vaeskf2, Vector AES-256 Forward KeySchedule]]
+==== vaeskf2.vi
+
+概要::
+向量 AES-256 前向密钥调度生成
+
+助记符::
+vaeskf2.vi vd, vs2, uimm
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'uimm'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101010'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS 
+|EEW
+|定义
+
+| Vd   | 输入  | 128  | 4 | 32 | 前一轮密钥
+| uimm | 输入  | -    | - | -  | 轮数 (rnd)
+| Vs2  | 输入  | 128  | 4 | 32 | 当前轮密钥
+| Vd   | 输出 | 128  | 4 | 32 | 下一轮密钥
+|===
+
+描述::
+执行 AES-256 密钥调度的单轮操作。
+
+在每个元素组内，从 `vd` 中的前一轮密钥元素组和前一轮密钥的前一个字生成下一个轮密钥。最不重要的字是通过对当前轮密钥的最重要字应用一个函数，然后将结果与轮常数进行异或生成的。轮数用于选择轮常数以及函数。
+
+轮数范围为 2 到 14，来自 `uimm[3:0]`；`uimm[4]` 被忽略。0-1 和 15 的超出范围的 `uimm[3:0]` 值通过反转 `uimm[3]` 映射到范围内的值。因此，0-1 映射到 8-9，15 映射到 7。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+[NOTE]
+====
+我们选择将超出范围的轮数映射到范围内的值，因为这允许指令的行为对所有 `uimm[4:0]` 值完全定义，并且需要最少的额外逻辑。
+====
+
+操作::
+[source,Sail]
+--
+function clause execute (VAESKF2(rnd, vd, vs2)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+ // 将超出范围的立即数投影到范围内的值
+ if((unsigned(rnd[3:0]) < 2) |  (unsigned(rnd[3:0]) > 14)) then rnd[3] = ~rnd[3]
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+
+  foreach (i from eg_start to eg_len-1) {
+      let CurrentRoundKey[3:0]  : bits(128)  = get_velem(vs2, EGW=128, i);
+      let RoundKeyB[3:0] : bits(32)  = get_velem(vd, EGW=128, i); // 前一轮密钥
+
+      let w[0] : bits(32) = if (rnd[0]==1) then
+        aes_subword_fwd(CurrentRoundKey[3]) XOR RoundKeyB[0]; 
+      else
+        aes_subword_fwd(aes_rotword(CurrentRoundKey[3])) XOR aes_decode_rcon((rnd>>1) - 1) XOR RoundKeyB[0];
+      w[1] : bits(32) = w[0] XOR RoundKeyB[1]
+      w[2] : bits(32) = w[1] XOR RoundKeyB[2]
+      w[3] : bits(32) = w[2] XOR RoundKeyB[3]
+      set_velem(vd, EGW=128, i, w[3:0]);
+    }
+    RETIRE_SUCCESS
+  }
+}
+--
+
+包含于::
+<<zvkn>>, <<zvknc>>, <<zvkned>>, <<zvkng>>
+
+<<<
+
+[[insns-vaesz, Vector AES round zero]]
+==== vaesz.vs
+
+概要::
+向量 AES 零轮加密/解密
+
+助记符::
+vaesz.vs vd, vs2
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '00111'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101001'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+* `vd` 寄存器组与 `vs2` 寄存器重叠
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS 
+|EEW
+|定义
+
+| vd  | 输入  | 128  | 4 | 32 | 轮状态
+| vs2 | 输入  | 128  | 4 | 32 | 轮密钥 
+| vd  | 输出 | 128  | 4 | 32 | 新轮状态
+|===
+
+描述::
+执行 AES 块密码的零轮操作。此操作用于加密和解密。
+
+此指令仅有 `.vs` 形式。`Vs2` 持有一个标量元素组，作为所有轮状态元素组的轮密钥。每个元素组的新轮状态输出通过将轮密钥与 `vd` 的每个元素组进行异或生成。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+[NOTE]
+====
+此指令用于避免在轮密钥对所有 128 位“通道”相同时需要“扩展” 128 位向量寄存器组。这样的扩展通常通过 `vrgather` 指令实现，这会在许多实现中影响性能。此指令仅存在 `.vs` 形式，因为 `.vv` 形式与 `vxor.vv vd, vs2, vd` 指令相同。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (VAESZ(vs2, vd) = {
+  if(((vstart%EGS)<>0) | (LMUL*VLEN < EGW))  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  foreach (i from eg_start to eg_len-1) {
+    let state : bits(128) = get_velem(vd, EGW=128, i);
+    let rkey  : bits(128) = get_velem(vs2, EGW=128, 0);
+    let ark   : bits(128) = state ^ rkey;
+    set_velem(vd, EGW=128, i, ark);
+  }
+  RETIRE_SUCCESS
+  }
+}
+--
+
+包含于::
+<<zvkn>>, <<zvknc>>, <<zvkned>>, <<zvkng>>
+
+<<<
+
+[[insns-vandn, Vector And-Not]]
+==== vandn.[vv,vx]
+
+概要::
+按位与非
+
+助记符::
+vandn.vv vd, vs2, vs1, vm +
+vandn.vx vd, vs2, rs1, vm
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '000001'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVX'},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '000001'},
+]}
+....
+
+向量-向量参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs1 | 输入  | 操作数1（取反）
+| Vs2 | 输入  | 操作数2
+| Vd  | 输出 | 结果 
+|===
+
+向量-标量参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Rs1     | 输入  | 操作数1（取反）
+| Vs2     | 输入  | 操作数2 
+| Vd      | 输出 | 结果 
+|===
+
+描述::
+执行按位与非操作。
+
+`Op1` 的每个位取反并与 `vs2` 中的相应位进行逻辑与。在向量-标量版本中，`Op1` 是标量寄存器 `rs1` 中的符号扩展或截断值。在向量-向量版本中，`Op1` 是 `vs1`。
+
+// This instruction must always be implemented such that its execution latency does not depend
+// on the data being operated upon.
+
+[NOTE]
+.关于指令必要性的说明
+====
+此指令对 SHA3 的性能至关重要，特别是 FIPS 202 Keccak 置换的 Chi 步骤。通过 2 条指令模拟它预计会对性能产生重大影响。此指令的 `.vv` 形式是 SHA3 所需的；添加 `.vx` 形式是为了完整性。
+====
+
+[NOTE]
+====
+没有 .vi 版本的此指令，因为可以通过使用 `vand.vi` 指令的立即数值的取反来实现相同的功能。
+====
+
+Operation::
+[source,sail]
+--
+function clause execute (VANDN(vs2, vs1, vd, suffix)) = {
+  foreach (i from vstart to vl-1) {
+    let op1 = match suffix {
+      "vv" => get_velem(vs1, SEW, i),
+      "vx" => sext_or_truncate_to_sew(X(vs1))
+    };
+    let op2 = get_velem(vs2, SEW, i);
+    set_velem(vd, EEW=SEW, i, ~op1 & op2);
+  }
+  RETIRE_SUCCESS
+}
+
+--
+
+Included in::
+<<zvbb>>, <<zvkb>>, <<zvkn>>, <<zvknc>>, <<Zvkng>>, <<zvks>>
+<<Zvksc>>, <<Zvksg>>
+
+<<<
+
+[[insns-vbrev, 向量反转元素中的位]]
+==== vbrev.v
+
+概要::
+向量反转元素中的位
+
+助记符::
+vbrev.v vd, vs2, vm
+
+编码 (向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '01010'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010010'},
+]}
+....
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs2 | 输入  | 输入元素
+| Vd  | 输出 | 反转位的元素
+|===
+
+描述::
+对每个元素的位进行反转。
+
+操作::
+[source,sail]
+--
+function clause execute (VBREV(vs2)) = {
+
+  foreach (i from vstart to vl-1) {
+    let input = get_velem(vs2, SEW, i);
+    let output : bits(SEW) = 0;
+    foreach (i from 0 to SEW-1)
+      let output[SEW-1-i] = input[i];
+    set_velem(vd, SEW, i, output)
+  }
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+<<zvbb>>
+
+<<<
+
+[[insns-vbrev8, 向量反转字节中的位]]
+==== vbrev8.v
+
+概要::
+向量反转字节中的位
+
+助记符::
+vbrev8.v vd, vs2, vm
+
+编码 (向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '01000'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010010'},
+]}
+....
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs2 | 输入  | 输入元素
+| Vd  | 输出 | 反转位的字节元素
+|===
+
+描述::
+对每个字节的位进行反转。
+
+[NOTE]
+====
+此指令通常用于在未实现 zvkg 扩展时的 GCM。此字节级指令为所有 SEW 定义，以消除在处理更宽元素时更改 SEW 的需要。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (VBREV8(vs2)) = {
+
+  foreach (i from vstart to vl-1) {
+    let input = get_velem(vs2, SEW, i);
+    let output : bits(SEW) = 0;
+    foreach (i from 0 to SEW-8 by 8)
+      let output[i+7..i] = reverse_bits_in_byte(input[i+7..i]);
+    set_velem(vd, SEW, i, output)
+  }
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+<<zvbb>>, <<zvkb>>, <<zvkn>>, <<zvknc>>, <<Zvkng>>, <<zvks>>
+<<Zvksc>>, <<Zvksg>>
+
+<<<
+
+[[insns-vclmul, 向量无进位乘法]]
+==== vclmul.[vv,vx]
+
+概要::
+向量无进位乘法（返回乘积的低半部分）
+
+助记符::
+vclmul.vv vd, vs2, vs1, vm +
+vclmul.vx vd, vs2, rs1, vm
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '001100'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVX'},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '001100'},
+]}
+....
+保留编码::
+* `SEW` 为 64 以外的任何值
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs1/Rs1 | 输入  | 乘数
+| Vs2 | 输入  | 被乘数
+| Vd  | 输出 | 无进位乘积的低半部分
+|===
+
+描述::
+生成 128 位无进位乘积的低半部分。
+
+`vs2` 向量寄存器中的每个 64 位元素与 `vs1` 中的每个 64 位元素（向量-向量）或整数寄存器 `rs1` 中的 64 位值（向量-标量）进行无进位乘法。结果是无进位乘积的最低 64 位。
+
+[NOTE]
+====
+64 位无进位乘法指令可用于在没有 `zvkg` 扩展的情况下实现 GCM。我们不将这些指令排他，因为 64 位无进位乘法可以从 `zvkg` 扩展中的指令轻松派生，并且在其他领域也有用。同样，我们将其他 SEW 值视为保留，以免阻止未来扩展使用此操作码进行不同元素宽度的操作。例如，未来的扩展可能会定义 `SEW`=32 版本的此指令，以使 `Zve32*` 实现具有向量无进位乘法指令。
+====
+
+操作::
+[source,sail]
+--
+
+
+function clause execute (VCLMUL(vs2, vs1, vd, suffix)) = {
+
+  foreach (i from vstart to vl-1) {
+    let op1 : bits (64) = if suffix =="vv" then get_velem(vs1,i)
+                          else zext_or_truncate_to_sew(X(vs1));
+    let op2 : bits (64) = get_velem(vs2,i);
+    let product : bits (64) = clmul(op1,op2,SEW);
+    set_velem(vd, i, product);
+  }
+  RETIRE_SUCCESS
+}
+
+function clmul(x, y, width) = {
+  let result : bits(width) = zeros();
+  foreach (i from 0 to (width - 1)) {
+    if y[i] == 1 then result = result ^ (x << i);
+  }
+  result
+}
+--
+
+包含于::
+<<zvbc>>, <<zvknc>>, <<zvksc>>
+
+<<<
+
+[[insns-vclmulh, 向量无进位乘法返回高半部分]]
+==== vclmulh.[vv,vx]
+
+概要::
+向量无进位乘法（返回乘积的高半部分）
+
+助记符::
+vclmulh.vv vd, vs2, vs1, vm +
+vclmulh.vx vd, vs2, rs1, vm
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '001101'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVX'},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '001101'},
+]}
+....
+保留编码::
+* `SEW` 为 64 以外的任何值
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs1 | 输入  | 乘数
+| Vs2 | 输入  | 被乘数
+| Vd  | 输出 | 无进位乘积的高半部分
+|===
+
+描述::
+生成 128 位无进位乘积的高半部分。
+
+`vs2` 向量寄存器中的每个 64 位元素与 `vs1` 中的每个 64 位元素（向量-向量）或整数寄存器 `rs1` 中的 64 位值（向量-标量）进行无进位乘法。结果是无进位乘积的最高 64 位。
+
+操作::
+[source,sail]
+--
+function clause execute (VCLMULH(vs2, vs1, vd, suffix)) = {
+
+  foreach (i from vstart to vl-1) {
+    let op1 : bits (64) = if suffix =="vv" then get_velem(vs1,i)
+                          else zext_or_truncate_to_sew(X(vs1));
+    let op2 : bits (64) = get_velem(vs2, i);
+    let product : bits (64) = clmulh(op1, op2, SEW);
+    set_velem(vd, i, product);
+  }
+  RETIRE_SUCCESS
+}
+
+function clmulh(x, y, width) = {
+  let result : bits(width) = 0;
+  foreach (i from 1 to (width - 1)) {
+    if y[i] == 1 then result = result ^ (x >> (width - i));
+  }
+  result
+}
+
+--
+
+包含于::
+<<zvbc>>, <<zvknc>>, <<zvksc>>
+
+<<<
+
+[[insns-vclz, 向量前导零计数]]
+==== vclz.v
+
+概要::
+向量前导零计数
+
+助记符::
+vclz.v vd, vs2, vm
+
+编码 (向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '01100'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010010'},
+]}
+....
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs2 | 输入  | 输入元素
+| Vd  | 输出 | 前导零位数
+|===
+
+描述::
+对每个元素执行前导零计数。
+
+对于零值输入，结果为 SEW 的值。
+
+操作::
+[source,sail]
+--
+function clause execute (VCLZ(vs2)) = {
+
+  foreach (i from vstart to vl-1) {
+    let input = get_velem(vs2, SEW, i);
+    for (j = (SEW - 1); j >= 0;  j--)
+      if [input[j]] == 0b1 then break;
+    set_velem(vd, SEW, i, SEW - 1 - j)
+  }
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+<<zvbb>>
+
+[[insns-vcpop, 向量人口计数]]
+==== vcpop.v
+
+概要::
+计算每个元素中设置的位数
+
+助记符::
+vcpop.v vd, vs2, vm
+
+编码 (向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '01110'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010010'},
+]}
+....
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs2 | 输入  | 输入元素
+| Vd  | 输出 | 设置的位数
+|===
+
+描述::
+对每个元素执行人口计数。
+
+操作::
+[source,sail]
+--
+function clause execute (VCPOP(vs2)) = {
+
+  foreach (i from vstart to vl-1) {
+    let input = get_velem(vs2, SEW, i);
+    let output : bits(SEW) = 0;
+    for (j = 0; j < SEW;  j++)
+      output = output + input[j];
+    set_velem(vd, SEW, i, output)
+  }
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+<<zvbb>>
+
+[[insns-vctz, 向量尾随零计数]]
+==== vctz.v
+
+概要::
+向量尾随零计数
+
+助记符::
+vctz.v vd, vs2, vm
+
+编码 (向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '01101'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010010'},
+]}
+....
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs2 | 输入  | 输入元素
+| Vd  | 输出 | 尾随零位数
+|===
+
+描述::
+对每个元素执行尾随零计数。
+
+操作::
+[source,sail]
+--
+function clause execute (VCTZ(vs2)) = {
+
+  foreach (i from vstart to vl-1) {
+    let input = get_velem(vs2, SEW, i);
+    for (j = 0; j < SEW;  j++)
+      if [input[j]] == 0b1 then break;
+    set_velem(vd, SEW, i, j)
+  }
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+<<zvbb>>
+
+<<<
+
+[[insns-vghsh, 向量 GHASH 加-乘]]
+==== vghsh.vv
+
+概要::
+在 GHASH Galois-Field 上进行向量加-乘
+
+助记符::
+vghsh.vv vd, vs2, vs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101100'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS
+|SEW
+|定义
+
+| Vd  | 输入  | 128  | 4 | 32 | 部分哈希 (Y~i~)
+| Vs1 | 输入  | 128  | 4 | 32 | 密文 (X~i~)
+| Vs2 | 输入  | 128  | 4 | 32 | 哈希子密钥 (H)
+| Vd  | 输出 | 128  | 4 | 32 | 部分哈希 (Y~i+1~)
+|===
+
+描述:: 
+执行 GHASH~H~ 算法的单次“迭代”。
+
+此指令将所有输入和输出视为 128 位多项式，并在 GF[2] 上执行操作。
+它通过将当前部分哈希 (Y~i~) 加到密文块 (X~i~)，然后将此和乘以哈希子密钥 (H)（在 GF(2^128^) 上）来生成下一个部分哈希 (Y~i+1~)。
+
+在 GF(2^128^) 上的乘法是两个 128 位多项式的无进位乘法，模 GHASH 的不可约多项式 (x^128^ + x^7^ + x^2^ + x + 1)。
+
+操作可以简洁地定义为
+// Y~i+1~ = (Y~i~ &#183; H) ^ X~i~
+Y~i+1~ = ((Y~i~ ^ X~i~) &#183; H)
+
+NIST 规范（见 <<zvkg>>）按从左到右的顺序排列系数 x~0~x~1~x~2~...x~127~，对于多项式 x~0~ + x~1~u +x~2~ u^2^ + ... + x~127~u^127^。这可以看作是内存中字节元素的集合，最低系数的字节（即 0,1,2,3,4,5,6,7）位于最低内存地址。由于字节中的位是反转的，此指令在字节内执行位交换以将位放入标准顺序（例如，7,6,5,4,3,2,1,0）。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+[NOTE]
+====
+我们正在反转输入和输出的字节位，以便中间值与 NIST 规范一致。这些反转实现起来很便宜，因为它们无条件地交换位位置，因此不需要任何逻辑。
+====
+
+[NOTE]
+====
+由于相同的哈希子密钥 `H` 通常会在给定消息上重复使用，未来的扩展可能会定义此指令的向量-标量版本，其中 `vs2` 是标量元素组。这将有助于在 `LMUL` > 1 时减少寄存器压力。
+====
+
+操作::
+[source,pseudocode]
+--
+function clause execute (VGHSH(vs2, vs1, vd)) = {
+  // 操作数在每个字节中反转输入
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  foreach (i from eg_start to eg_len-1) {
+    let Y = (get_velem(vd,EGW=128,i));  // 当前部分哈希
+    let X = get_velem(vs1,EGW=128,i);  // 块密码输出
+    let H = brev8(get_velem(vs2,EGW=128,i)); // 哈希子密钥
+
+    let Z : bits(128) = 0;
+
+    let S = brev8(Y ^ X);
+
+    for (int bit = 0; bit < 128; bit++) {
+      if bit_to_bool(S[bit])
+        Z ^= H
+
+      bool reduce = bit_to_bool(H[127]);
+      H = H << 1; // 左移 H 1 位
+      if (reduce)
+        H ^= 0x87; // 使用 x^7 + x^2 + x^1 + 1 多项式进行约简
+    }
+
+    let result = brev8(Z); // 反转字节位以返回到 GCM 标准顺序
+    set_velem(vd, EGW=128, i, result);
+  }
+  RETIRE_SUCCESS
+ }
+}
+--
+
+包含于::
+<<zvkg>>, <<zvkng>>, <<zvksg>>
+
+<<<
+
+[[insns-vgmul, 向量 GHASH 乘法]]
+==== vgmul.vv
+
+概要::
+在 GHASH Galois-Field 上进行向量乘法
+
+助记符::
+vgmul.vv vd, vs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '10001'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101000'},
+]}
+....
+保留编码::
+* `SEW` 为 32 以外的任何值
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS
+|SEW
+|定义
+
+| Vd  | 输入  | 128  | 4 | 32 | 乘数
+| Vs2 | 输入  | 128  | 4 | 32 | 被乘数
+| Vd  | 输出 | 128  | 4 | 32 | 乘积
+|===
+
+描述:: 
+执行 GHASH~H~ 乘法。
+
+此指令将所有输入和输出视为 128 位多项式，并在 GF[2] 上执行操作。
+它生成两个 128 位输入在 GF(2^128^) 上的乘积。
+
+在 GF(2^128^) 上的乘法是两个 128 位多项式的无进位乘法，模 GHASH 的不可约多项式 (x^128^ + x^7^ + x^2^ + x + 1)。
+
+NIST 规范（见 <<zvkg>>）按从左到右的顺序排列系数 x~0~x~1~x~2~...x~127~，对于多项式 x~0~ + x~1~u +x~2~ u^2^ + ... + x~127~u^127^。这可以看作是内存中字节元素的集合，最低系数的字节（即 0,1,2,3,4,5,6,7）位于最低内存地址。由于字节中的位是反转的，此指令在字节内执行位交换以将位放入标准顺序（例如，7,6,5,4,3,2,1,0）。
+
+此指令的执行延迟必须始终与操作的数据无关。
+
+[NOTE]
+====
+我们正在反转输入和输出的字节位，以便中间值与 NIST 规范一致。这些反转实现起来很便宜，因为它们无条件地交换位位置，因此不需要任何逻辑。
+====
+
+[NOTE]
+====
+由于相同的被乘数通常会在给定消息上重复使用，未来的扩展可能会定义此指令的向量-标量版本，其中 `vs2` 是标量元素组。这将有助于在 `LMUL` > 1 时减少寄存器压力。
+====
+
+[NOTE]
+====
+此指令与 `vghsh.vv` 相同，只是 vs1=0。
+此指令通常用于 GHASH 代码。在某些情况下，它后面会跟一个 XOR 以执行乘加。实现可能会选择融合这两个指令，以提高不使用 `vghsh.vv` 指令的加乘形式的 GHASH 代码的性能。
+====
+
+操作::
+[source,pseudocode]
+--
+function clause execute (VGMUL(vs2, vs1, vd)) = {
+  // 操作数在每个字节中反转输入
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  foreach (i from eg_start to eg_len-1) {
+    let Y = brev8(get_velem(vd,EGW=128,i));  // 乘数
+    let H = brev8(get_velem(vs2,EGW=128,i)); // 被乘数
+    let Z : bits(128) = 0;
+
+    for (int bit = 0; bit < 128; bit++) {
+      if bit_to_bool(Y[bit])
+        Z ^= H
+
+      bool reduce = bit_to_bool(H[127]);
+      H = H << 1; // 左移 H 1 位
+      if (reduce)
+        H ^= 0x87; // 使用 x^7 + x^2 + x^1 + 1 多项式进行约简
+    }
+
+    let result = brev8(Z); 
+    set_velem(vd, EGW=128, i, result);
+  }
+  RETIRE_SUCCESS
+ }
+}
+--
+
+包含于::
+<<zvkg>>, <<zvkng>>, <<zvksg>>
+
+<<<
+
+[[insns-vrev8, 向量反转字节]]
+==== vrev8.v
+
+概要::
+向量反转字节
+
+助记符::
+vrev8.v vd, vs2, vm
+
+编码 (向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '01001'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010010'},
+]}
+....
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs2 | 输入  | 输入元素
+| Vd  | 输出 | 反转字节的元素
+|===
+
+描述::
+对 `vs2` 的每个元素执行字节反转，有效地执行字节序交换。
+
+// 此指令必须始终以其执行延迟不依赖于操作的数据的方式实现。
+
+[NOTE]
+====
+此元素级字节序交换对于包括 SHA2 和 SM3 在内的几种加密算法是必需的。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (VREV8(vs2)) = {
+  foreach (i from vstart to vl-1) {
+    input = get_velem(vs2, SEW, i);
+    let output : SEW = 0;
+    let j = SEW - 1;
+    foreach (k from 0 to (SEW - 8) by 8) {
+      output[k..(k + 7)] = input[(j - 7)..j];
+      j = j - 8;
+    set_velem(vd, SEW, i, output)
+  }
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+<<zvbb>>, <<zvkb>>, <<zvkn>>, <<zvknc>>, <<Zvkng>>, <<zvks>>
+<<Zvksc>>, <<Zvksg>>
+
+<<<
+
+[[insns-vrol, 向量左旋]]
+==== vrol.[vv,vx]
+
+概要::
+向量按向量/标量左旋
+
+助记符::
+vrol.vv vd, vs2, vs1, vm +
+vrol.vx vd, vs2, rs1, vm +
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010101'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVX'},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010101'},
+]}
+....
+
+向量-向量参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs1 | 输入  | 旋转量
+| Vs2 | 输入  | 数据
+| Vd  | 输出 | 旋转后的数据
+|===
+
+向量-标量参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Rs1     | 输入  | 旋转量
+| Vs2     | 输入  | 数据
+| Vd      | 输出 | 旋转后的数据
+|===
+
+描述:: 
+对 `vs2` 的每个元素执行按位左旋。
+
+`vs2` 中的元素按 `vs1`（向量-向量）或整数寄存器 `rs1`（向量-标量）指定的旋转量左旋。
+仅使用旋转量值的低 log2(`SEW`) 位，所有其他位被忽略。
+
+// 此指令必须始终以其执行延迟不依赖于操作的数据的方式实现。
+
+[NOTE]
+====
+没有此指令的立即数形式（即 `vrol.vi`），因为可以通过取反旋转量并使用右旋指令的立即数形式（即 `vror.vi`）实现相同的功能。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (VROL_VV(vs2, vs1, vd)) = {
+  foreach (i from vstart to vl - 1) {
+    set_velem(vd, EEW=SEW, i,
+      get_velem(vs2, i) <<< (get_velem(vs1, i) & (SEW-1))
+    )
+  }
+  RETIRE_SUCCESS
+}
+
+function clause execute (VROL_VX(vs2, rs1, vd)) = {
+  foreach (i from vstart to vl - 1) {
+    set_velem(vd, EEW=SEW, i, 
+      get_velem(vs2, i) <<< (X(rs1) & (SEW-1))
+    )
+  }
+  RETIRE_SUCCESS
+}
+
+--
+
+包含于::
+<<zvbb>>, <<zvkb>>, <<zvkn>>, <<zvknc>>, <<Zvkng>>, <<zvks>>
+<<Zvksc>>, <<Zvksg>>
+
+<<<
+
+[[insns-vror, 向量右旋]]
+==== vror.[vv,vx,vi]
+
+概要::
+向量按向量/标量/立即数右旋
+
+助记符::
+vror.vv vd, vs2, vs1, vm +
+vror.vx vd, vs2, rs1, vm +
+vror.vi vd, vs2, uimm, vm
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010100'},
+]}
+....
+
+编码 (向量-标量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVX'},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '010100'},
+]}
+....
+
+编码 (向量-立即数)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVI'},
+{bits: 5, name: 'uimm[4:0]'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 1, name: 'i5'},
+{bits: 5, name: '01010'},
+]}
+....
+
+向量-向量参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs1 | 输入  | 旋转量
+| Vs2 | 输入  | 数据
+| Vd  | 输出 | 旋转后的数据
+|===
+
+向量-标量/立即数参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Rs1/imm | 输入  | 旋转量
+| Vs2     | 输入  | 数据
+| Vd      | 输出 | 旋转后的数据
+|===
+
+
+描述:: 
+对 `vs2` 的每个元素执行按位右旋。
+
+`vs2` 中的元素按 `vs1`（向量-向量）、整数寄存器 `rs1`（向量-标量）或立即数值（向量-立即数）指定的旋转量右旋。
+仅使用旋转量值的低 log2(`SEW`) 位，所有其他位被忽略。
+
+// This instruction must always be implemented such that its execution latency does not depend
+// on the data being operated upon.
+
+Operation::
+[source,sail]
+--
+function clause execute (VROR_VV(vs2, vs1, vd)) = {
+  foreach (i from vstart to vl - 1) {
+    set_velem(vd, EEW=SEW, i,
+      get_velem(vs2, i) >>> (get_velem(vs1, i) & (SEW-1))
+    )
+  }
+  RETIRE_SUCCESS
+}
+
+function clause execute (VROR_VX(vs2, rs1, vd)) = {
+  foreach (i from vstart to vl - 1) {
+    set_velem(vd, EEW=SEW, i, 
+      get_velem(vs2, i) >>> (X(rs1) & (SEW-1))
+    )
+  }
+  RETIRE_SUCCESS
+}
+
+function clause execute (VROR_VI(vs2, imm[5:0], vd)) = {
+  foreach (i from vstart to vl - 1) {
+    set_velem(vd, EEW=SEW, i, 
+      get_velem(vs2, i) >>> (imm[5:0] & (SEW-1))
+    )
+  }
+  RETIRE_SUCCESS
+}
+--
+
+Included in::
+<<zvbb>>, <<zvkb>>, <<zvkn>>, <<zvknc>>, <<Zvkng>>, <<zvks>>
+<<Zvksc>>, <<Zvksg>>
+
+<<<
+
+[[insns-vsha2c, 向量 SHA-2 压缩]]
+==== vsha2c[hl].vv
+
+概要::
+向量 SHA-2 两轮压缩
+
+助记符::
+vsha2ch.vv vd, vs2, vs1 +
+vsha2cl.vv vd, vs2, vs1
+
+编码 (向量-向量) 高部分::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101110'},
+]}
+....
+
+编码 (向量-向量) 低部分::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101111'},
+]}
+....
+保留编码::
+* `zvknha`: `SEW` 为 32 以外的任何值
+* `zvknhb`: `SEW` 为 32 或 64 以外的任何值
+* `vd` 寄存器组与 `vs1` 或 `vs2` 重叠
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS
+|EEW
+|定义
+
+| Vd  | 输入  | 4*SEW  | 4 | SEW | 当前状态 {c, d, g, h}
+| Vs1 | 输入  | 4*SEW  | 4 | SEW | 消息调度加常量[3:0]
+| Vs2 | 输入  | 4*SEW  | 4 | SEW | 当前状态 {a, b, e, f}
+| Vd  | 输出 | 4*SEW  | 4 | SEW | 下一个状态 {a, b, e, f}
+|===
+
+描述::
+- `SEW`=32: 执行 2 轮 SHA-256 压缩 (`zvknha` 和 `zvknhb`)
+- `SEW`=64: 执行 2 轮 SHA-512 压缩 (`zvkhnb`)
+
+`vs1` 中的两个字与 `vd` 和 `vs1` 中的当前状态的 8 个字一起处理，以执行两轮哈希计算，生成下一个状态的四个字。
+
+这些指令接收两个 SEW 字 _W1_ 和 _W0_，它们是消息调度的下两个字，并加上适当的常量（参见
+link:https://doi.org/10.6028/NIST.FIPS.180-4[FIPS PUB 180-4 安全哈希标准 (SHS)]），以及八个 SEW 字变量：_a_, _b_, _c_, _d_, _e_, _f_, _g_, 和 _h_。输出是执行 2 轮哈希计算后的 _a, b, e_ 和 _f_ 的新值。新值 _c_, _d_, _g_, 和 _h_ 等于输入值 _a_, _b_, _e_, _f_。
+
+[TIP]
+.给软件开发人员的提示
+====
+NIST 标准（见 <<zvknh>>）要求最终哈希在 SEW 大小的字内为大端字节顺序。由于此指令将所有字视为小端，软件需要在处理完所有消息块后对最终输出进行字节序交换。
+====
+
+[NOTE]
+====
+`vsha2ch` 版本的此指令使用 `vs1` 中元素组的两个最高有效消息调度字，而 `vsha2cl` 版本使用两个最低有效消息调度字。除此之外，这些版本的指令是相同的。拥有高低版本的此指令通常在交错独立的哈希操作时提高性能（例如，同时哈希多个文件）。
+====
+
+[NOTE]
+====
+防止 `vd` 与 `vs1` 或 `vs2` 重叠简化了 `VLEN < EGW` 的实现。这种限制不会对编码产生任何影响，因为算法的正确实现要求 `vd`、`vs1` 和 `vs2` 是不同的寄存器。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (VSHA2c(vs2, vs1, vd)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  foreach (i from eg_start to eg_len-1) {
+	  let {a @ b @ e @ f} : bits(4*SEW) = get_velem(vs2, 4*SEW, i);
+	  let {c @ d @ g @ h} : bits(4*SEW) = get_velem(vd, 4*SEW, i);
+	  let MessageShedPlusC[3:0] : bits(4*SEW) = get_velem(vs1, 4*SEW, i);
+	  let {W1, W0} == VSHA2cl ? MessageSchedPlusC[1:0] : MessageSchedPlusC[3:2]; // l vs h difference is the words selected
+
+	  let T1 : bits(SEW) = h + sum1(e) + ch(e,f,g) + W0;
+	  let T2 : bits(SEW) = sum0(a) + maj(a,b,c);
+	  h  = g;
+	  g  = f;
+	  f  = e;	
+	  e  = d + T1;
+	  d  = c;
+	  c  = b;
+	  b  = a;
+	  a = T1 + T2;
+
+
+	  T1  = h + sum1(e) + ch(e,f,g) + W1;
+	  T2  = sum0(a) + maj(a,b,c);
+	  h = g;
+	  g = f;
+	  f = e;	
+	  e = d + T1;
+	  d = c;
+	  c = b;
+	  b = a;
+	  a = T1 + T2;
+	  set_velem(vd, 4*SEW, i, {a @ b @ e @ f});
+  }
+  RETIRE_SUCCESS
+  }
+}
+
+function sum0(x) = {
+	match SEW {
+		32 => rotr(x,2)  XOR rotr(x,13) XOR rotr(x,22),
+		64 => rotr(x,28) XOR rotr(x,34) XOR rotr(x,39)
+	}
+}
+
+function sum1(x) = {
+	match SEW {
+		32 => rotr(x,6)  XOR rotr(x,11) XOR rotr(x,25),
+		64 => rotr(x,14) XOR rotr(x,18) XOR rotr(x,41)
+	}
+}
+
+function ch(x, y, z) = ((x & y) ^ ((~x) & z))
+
+
+function maj(x, y, z) =  ((x & y) ^ (x & z) ^ (y & z))
+
+function ROTR(x,n) = (x >> n) | (x << SEW - n)
+
+--
+
+包含于::
+<<zvkn>>, <<zvknc>>, <<zvkng>>, <<zvknh, zvknh[ab]>>
+
+<<<
+
+[[insns-vsha2ms, 向量 SHA-2 消息调度]]
+==== vsha2ms.vv
+
+概要::
+向量 SHA-2 消息调度
+
+助记符::
+vsha2ms.vv vd, vs2, vs1
+
+编码 (向量-向量)::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101101'},
+]}
+....
+保留编码::
+* `zvknha`: `SEW` 为 32 以外的任何值
+* `zvknhb`: `SEW` 为 32 或 64 以外的任何值
+* `vd` 寄存器组与 `vs1` 或 `vs2` 重叠
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS
+|EEW
+|定义
+
+| Vd  | 输入  | 4*SEW  | 4 | SEW | 消息字 {W[3],  W[2],  W[1],  W[0]}
+| Vs2 | 输入  | 4*SEW  | 4 | SEW | 消息字 {W[11], W[10], W[9],  W[4]}
+| Vs1 | 输入  | 4*SEW  | 4 | SEW | 消息字 {W[15], W[14], -, W[12]}
+| Vd  | 输出 | 4*SEW  | 4 | SEW | 消息字 {W[19], W[18], W[17], W[16]}
+|===
+
+描述::
+- `SEW`=32: 执行 4 轮 SHA-256 消息调度扩展 (`zvknha` 和 `zvknhb`)
+- `SEW`=64: 执行 4 轮 SHA-512 消息调度扩展 (`zvkhnb`)
+
+从 `vd`（最旧）、`vs2` 和 `vs1`（最新）中读取的最后 16 个 `SEW` 大小的消息调度字中的 11 个被处理以生成下 4 个消息调度字。
+
+[TIP]
+.给软件开发人员的提示
+====
+消息调度的前 16 个 SEW 大小的字来自消息块，以大端字节顺序存储。由于此指令将所有字视为小端，软件需要对这些字进行字节序交换。
+
+所有后续的消息调度字由此指令生成，因此不需要字节序交换。
+====
+
+[TIP]
+.给软件开发人员的提示
+====
+软件需要将字打包成元素组，如上面的参数表所示。索引表示相对年龄，较低的索引表示较旧的字。
+====
+
+[NOTE]
+====
+防止 `vd` 与 `vs1` 或 `vs2` 重叠简化了 `VLEN < EGW` 的实现。这种限制不会对编码产生任何影响，因为算法的正确实现要求 `vd`、`vs1` 和 `vs2` 是不同的寄存器。
+====
+
+操作::
+操作::
+[source,sail]
+--
+function clause execute (VSHA2ms(vs2, vs1, vd)) = {
+  // SEW32 = SHA-256
+  // SEW64 = SHA-512
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+
+  foreach (i from eg_start to eg_len-1) {
+    {W[3] @  W[2] @  W[1] @  W[0]}  : bits(EGW) = get_velem(vd, EGW, i);
+    {W[11] @ W[10] @ W[9] @  W[4]}  : bits(EGW) = get_velem(vs2, EGW, i);
+    {W[15] @ W[14] @ W[13] @ W[12]} : bits(EGW) = get_velem(vs1, EGW, i);
+  
+    W[16] = sig1(W[14]) + W[9]  + sig0(W[1]) + W[0];
+    W[17] = sig1(W[15]) + W[10] + sig0(W[2]) + W[1];
+    W[18] = sig1(W[16]) + W[11] + sig0(W[3]) + W[2];
+    W[19] = sig1(W[17]) + W[12] + sig0(W[4]) + W[3];
+
+    set_velem(vd, EGW, i, {W[19] @ W[18] @ W[17] @ W[16]});
+  }
+  RETIRE_SUCCESS
+  }
+}
+
+function sig0(x) = {
+	match SEW {
+		32 => (ROTR(x,7) XOR ROTR(x,18) XOR SHR(x,3)),
+		64 => (ROTR(x,1) XOR ROTR(x,8) XOR SHR(x,7)));
+	}
+}
+
+function sig1(x) = {
+	match SEW {
+		32 => (ROTR(x,17) XOR ROTR(x,19) XOR SHR(x,10),
+		64 => ROTR(x,19) XOR ROTR(x,61) XOR SHR(x,6));
+	}
+}
+
+function ROTR(x,n) = (x >> n) | (x << SEW - n)
+function SHR (x,n) = x >> n
+
+--
+
+包含于::
+ <<zvkn>>, <<zvknc>>, <<zvkng>>, <<zvknh, zvknh[ab]>>
+
+<<<
+
+[[insns-vsm3c, SM3 压缩]]
+==== vsm3c.vi
+
+概要::
+向量 SM3 压缩
+
+助记符::
+vsm3c.vi vd, vs2, uimm
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'uimm'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101011'},
+]}
+....
+保留编码::
+* `SEW` 为除 32 以外的任何值
+* `vd` 寄存器组与 `vs2` 寄存器组重叠
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS
+|EEW
+|定义
+
+| Vd   | 输入  | 256  | 8 | 32 | 当前状态 {H,G.F,E,D,C,B,A}
+| uimm | 输入  | -    | - | -  | 轮次编号 (rnds)
+| Vs2  | 输入  | 256  | 8 | 32 | 消息字 {-,-,w[5],w[4],-,-,w[1],w[0]}
+| Vd   | 输出  | 256  | 8 | 32 | 下一状态 {H,G.F,E,D,C,B,A}
+|===
+
+描述::
+执行两轮 SM3 压缩。
+
+当前状态的八个 32 位字作为一个元素组从 `vd` 中读取。八个 32 位消息字作为一个元素组从 `vs2` 中读取，但只使用其中的四个。
+所有 32 位输入字从大端字节序转换为小端字节序。
+这些输入根据轮次组（由 rnds 指定）进行处理，并生成下一状态作为八个 32 位字的元素组。
+生成的八个 32 位字的下一状态从小端字节序转换为大端字节序，并返回到一个八元素组中。
+
+轮次编号由 5 位 `rnds` 无符号立即数提供。合法值为 0 - 31，表示正在执行的两轮组。例如，如果 rnds=1，则执行第 2 和第 3 轮。
+
+[NOTE]
+====
+轮次编号用于常量的旋转，并告知行为在第 0-15 轮和第 16-63 轮之间的差异。
+====
+
+[NOTE]
+====
+输入和输出字节的字节序交换使我们能够与 SM3 规范对齐，而无需软件执行这些交换。
+====
+
+[NOTE]
+====
+防止 `vd` 和 `vs2` 重叠简化了 `VLEN < EGW` 的实现。
+此限制不会对编码产生任何影响，因为算法的正确实现要求 `vd` 和 `vs2` 是不同的寄存器。
+====
+
+// 元素按寄存器中出现的顺序列出，最重要的元素在左，最不重要的在右。
+
+// vs2 = {w[7], w[6], w[5], w[4], w[3], w[2], w[1], w[0]}
+
+// 指令消耗的值为
+
+// vs2 = {- , - , w[5], w[4], -, -, w[1], w[0]}
+
+// 其中 "-" 字符不被消耗，因此是无关紧要的。
+
+// 此指令消耗 "W" 消息调度输入，并在内部根据需要生成 "W'" 值
+
+// 要处理的元素组数为 `vl`/`EGS`。
+// `vl` 必须设置为要处理的 `SEW=32` 元素数，因此必须是 `EGS=8` 的倍数。 +
+// 同样，`vstart` 必须是 `EGS=8` 的倍数。
+
+操作::
+[source,sail]
+--
+function clause execute (VSM3C(rnds, vs2, vd)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  foreach (i from eg_start to eg_len-1) {
+
+  // 加载状态
+  let {Hi @ Gi @ Fi @ Ei @ Di @ Ci @ Bi @ Ai} : bits(256) : bits(256) = (get_velem(vd, 256, i));
+  // 加载消息调度
+  let {u_w7 @ u_w6 @ w5i @ w4i @ u_w3 @ u_w2 @ w1i @ w0i} : bits(256) = (get_velem(vs2, 256, i));
+  // u_w 输入未使用
+
+// 执行字节序交换
+let H : bits(32) = rev8(Hi);
+let G : bits(32) = rev8(Gi);
+let F : bits(32) = rev8(Fi);
+let E : bits(32) = rev8(Ei);
+let D : bits(32) = rev8(Di);
+let C : bits(32) = rev8(Ci);
+let B : bits(32) = rev8(Bi);
+let A : bits(32) = rev8(Ai);
+
+let w5 = : bits(32) rev8(w5i);
+let w4 = : bits(32) rev8(w4i);
+let w1 = : bits(32) rev8(w1i);
+let w0 = : bits(32) rev8(w0i);
+
+let x0 :bits(32) = w0 ^ w4;  // W'[0]
+let x1 :bits(32) = w1 ^ w5;  // W'[1]
+
+let j = 2 * rnds;
+let ss1 : bits(32) = ROL32(ROL32(A, 12) + E + ROL32(T_j(j), j % 32), 7);
+let ss2 : bits(32) = ss1 ^ ROL32(A, 12);
+let tt1 : bits(32) = FF_j(A, B, C, j) + D + ss2 + x0;
+let tt2 : bits(32) = GG_j(E, F, G, j) + H + ss1 + w0;
+D = C;
+let : bits(32) C1 = ROL32(B, 9);
+B = A;
+let A1 : bits(32) = tt1;
+H = G;
+let G1 : bits(32) = ROL32(F, 19);
+F = E;
+let E1 : bits(32) = P_0(tt2);
+
+j = 2 * rnds + 1;
+ss1 = ROL32(ROL32(A1, 12) + E1 + ROL32(T_j(j), j % 32), 7);
+ss2 = ss1 ^ ROL32(A1, 12);
+tt1 = FF_j(A1, B, C1, j) + D + ss2 + x1;
+tt2 = GG_j(E1, F, G1, j) + H + ss1 + w1;
+D = C1;
+let C2 : bits(32) = ROL32(B, 9);
+B = A1;
+let A2 : bits(32) = tt1;
+H = G1;
+let G2 = : bits(32) ROL32(F, 19);
+F = E1;
+let E2 = : bits(32) P_0(tt2);
+
+// 更新目标寄存器 - 交换回大端字节序
+let result : bits(256) = {rev8(G1) @ rev8(G2) @ rev8(E1) @ rev8(E2) @ rev8(C1) @ rev8(C2) @ rev8(A1) @ rev8(A2)};
+set_velem(vd, 256, i, result);
+      }
+
+RETIRE_SUCCESS
+  }
+}
+
+function FF1(X, Y, Z) = ((X) ^ (Y) ^ (Z))
+function FF2(X, Y, Z) = (((X) & (Y)) | ((X) & (Z)) | ((Y) & (Z)))
+
+function FF_j(X, Y, Z, J) = (((J) <= 15) ? FF1(X, Y, Z) : FF2(X, Y, Z))
+
+function GG1(X, Y, Z) = ((X) ^ (Y) ^ (Z))
+function GG2(X, Y, Z) = (((X) & (Y)) | ((~(X)) & (Z)))
+.
+function GG_j(X, Y, Z, J) = (((J) <= 15) ? GG1(X, Y, Z) : GG2(X, Y, Z))
+
+function T_j(J) = (((J) <= 15) ? (0x79CC4519) : (0x7A879D8A))
+
+function P_0(X) = ((X) ^ ROL32((X),  9) ^ ROL32((X), 17))
+
+--
+
+包含于::
+<<zvks>>, <<zvksc>>, <<zvksg>>, <<zvksh>>
+
+<<<
+
+[[insns-vsm3me, SM3 消息扩展]]
+==== vsm3me.vv
+
+概要::
+向量 SM3 消息扩展
+
+助记符::
+vsm3me.vv vd, vs2, vs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '100000'},
+]}
+....
+保留编码::
+* `SEW` 为除 32 以外的任何值
+* `vd` 寄存器组与 `vs2` 寄存器组重叠。
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS
+|EEW
+|定义
+
+| Vs1 | 输入  | 256  | 8 | 32 | 消息字 W[7:0]
+| Vs2 | 输入  | 256  | 8 | 32 | 消息字 W[15:8]
+| Vd  | 输出  | 256  | 8 | 32 | 消息字 W[23:16]
+|===
+
+描述::
+执行八轮 SM3 消息扩展。
+
+最近的十六个 32 位消息字作为两个八元素组从 `vs1` 和 `vs2` 中读取。每个字从大端字节序转换为小端字节序。
+生成的下一个八个 32 位消息字从小端字节序转换为大端字节序，并返回到一个八元素组中。
+
+[NOTE]
+====
+输入和输出字节的字节序交换使我们能够与 SM3 规范对齐，而无需软件执行这些交换。
+====
+
+// NOTE
+// ====
+// 为了获得最佳性能，建议实现 VLEN≥256。
+// 当 VLEN<EGW 时，软件需要使用适当的 LMUL 以便将指定寄存器组中的元素组合成完整的元素组。
+// ====
+
+// 要处理的元素组数为 `vl`/`EGS`。
+// `vl` 必须设置为要处理的 `SEW=32` 元素数，因此必须是 `EGS=8` 的倍数。 +
+// 同样，`vstart` 必须是 `EGS=8` 的倍数。
+
+
+[NOTE]
+====
+防止 `vd` 和 `vs2` 重叠简化了 `VLEN < EGW` 的实现。
+此限制不应对编码产生任何影响，因为算法要求这些值保留以生成下 8 个字。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (VSM3ME(vs2, vs1)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  foreach (i from eg_start to eg_len-1) {
+    let w[7:0]  : bits(256) = get_velem(vs1, 256, i);
+    let w[15:8] : bits(256) = get_velem(vs2, 256, i);
+    
+    // 将输入从大端字节序转换为小端字节序
+    let w15 = rev8(w[15]);
+    let w14 = rev8(w[14]);
+    let w13 = rev8(w[13]);
+    let w12 = rev8(w[12]);
+    let w11 = rev8(w[11]);
+    let w10 = rev8(w[10]);
+    let w9  = rev8(w[9]);
+    let w8  = rev8(w[8]);
+    let w7  = rev8(w[7]);
+    let w6  = rev8(w[6]);
+    let w5  = rev8(w[5]);
+    let w4  = rev8(w[4]);
+    let w3  = rev8(w[3]);
+    let w2  = rev8(w[2]);
+    let w1  = rev8(w[1]);
+    let w0  = rev8(w[0]);
+
+    // 注意，一些新计算的字在后续调用中会使用。
+    let w[16] = ZVKSH_W(w0 @  w7 @  w13 @   w3 @  w10);
+    let w[17] = ZVKSH_W(w1 @  w8 @  w14 @   w4 @  w11);
+    let w[18] = ZVKSH_W(w2 @  w9 @  w15 @   w5 @  w12);
+    let w[19] = ZVKSH_W(w3 @ w10 @  w16 @   w6 @  w13);
+    let w[20] = ZVKSH_W(w4 @ w11 @  w17 @   w7 @  w14);
+    let w[21] = ZVKSH_W(w5 @ w12 @  w18 @   w8 @  w15);
+    let w[22] = ZVKSH_W(w6 @ w13 @  w19 @   w9 @  w16);
+    let w[23] = ZVKSH_W(w7 @ w14 @  w20 @  w10 @  w17);
+
+    // 将输出从小端字节序转换回大端字节序
+    let w16 : Bits(32) = rev8(W[16]);
+    let w17 : Bits(32) = rev8(W[17]);
+    let w18 : Bits(32) = rev8(W[18]);
+    let w19 : Bits(32) = rev8(W[19]);
+    let w20 : Bits(32) = rev8(W[20]);
+    let w21 : Bits(32) = rev8(W[21]);
+    let w22 : Bits(32) = rev8(W[22]);
+    let w23 : Bits(32) = rev8(W[23]);
+
+    // 更新目标寄存器。
+    set_velem(vd, 256, i, {w23 @ w22 @ w21 @ w20 @ w19 @ w18 @ w17 @ w16});
+  }
+  RETIRE_SUCCESS
+  }
+}
+
+  function P_1(X) ((X) ^ ROL32((X), 15) ^ ROL32((X), 23))
+
+  function ZVKSH_W(M16, M9, M3, M13, M6) = \
+  (P1( (M16) ^  (M9) ^ ROL32((M3), 15) ) ^ ROL32((M13), 7) ^ (M6))
+--
+
+包含于::
+<<zvks>>, <<zvksc>>, <<zvksg>>, <<zvksh>>
+
+<<<
+
+[[insns-vsm4k, 向量 SM4 密钥扩展]]
+==== vsm4k.vi
+
+概要::
+向量 SM4 密钥扩展
+
+助记符::
+vsm4k.vi vd, vs2, uimm
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: 'uimm'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '100001'},
+]}
+....
+保留编码::
+* `SEW` 为除 32 以外的任何值
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS
+|EEW
+|定义
+
+| uimm | 输入  | -    | - | -  | 轮次组 (rnd)
+| Vs2  | 输入  | 128  | 4 | 32 | 当前 4 轮密钥 rK[0:3]
+| Vd   | 输出  | 128  | 4 | 32 | 下一 4 轮密钥 rK'[0:3]
+|===
+
+描述::
+执行四轮 SM4 密钥扩展。
+
+四轮密钥作为一个 4 元素组从 `vs2` 中读取。通过迭代地将最后三个轮密钥与一个由轮次组编号索引的常量进行异或，执行字节替换，然后在此值的旋转版本与相应的当前轮密钥之间执行异或，生成每个下一轮密钥。
+
+轮次组编号 (`rnd`) 来自 `uimm[2:0]`；忽略 `uimm[4:3]` 中的位。
+轮次组编号范围为 0 到 7，表示正在生成的四轮密钥组。轮密钥范围为 0-31。
+例如，如果 `rnd`=1，则生成第 4、5、6 和 7 轮密钥。
+
+//  vs2 = {rK[i-4], rK[i-3],rK[i-2], rK[i-1]} // 最后 4 轮密钥
+//  rnd = 0 到 7; // 四轮组
+//  vd (输出) = {rK[i], rK[i+1],rK[i+2], rK[i+3]} // 下一 4 轮密钥
+
+// 每个 32 轮消耗最后 4 个 32 位密钥以及一个轮常量，并生成下一个 32 位密钥。
+
+[NOTE]
+====
+软件需要生成初始轮密钥。这是通过将 128 位加密密钥与系统参数 FK[0:3] 进行异或来完成的。
+====
+
+.系统参数
+[%autowidth]
+[%header,cols="^2,^2"]
+|===
+|FK
+|常量
+
+| 0 | A3B1BAC6
+| 1 | 56AA3350 
+| 2 | 677D9197
+| 3 | B27022DC
+|===
+
+////
+.系统参数
+[%autowidth]
+[%header,cols="^2,^2"]
+|===
+|FK
+|常量
+
+| 0 | A3B1BAC6
+| 1 | 56AA3350 
+| 2 | 677D9197
+| 3 | B27022DC
+|===
+////
+
+//  MK = {MK[0], MK[1], MK[2], MK[3]} // 加密密钥
+//  rK[-4,-1] = K[0:3] = MK[0:3] ^ FK[0:3]
+
+// 轮密钥为 rK[0] 到 rK[31]
+//  B = (rK[i-3] XOR rK[i-2] XOR rK[i-1] XOR CK[轮次]); +
+//  S = subBytes(B); + 
+//  rK[i]= rK[i-4] XOR S XOR ROTL13(S) XOR ROTR23(S); +
+//
+// 轮常量和 S 盒在下文描述，可在 https://datatracker.ietf.org/doc/id/// draft-crypto-sm4-00 找到
+
+[NOTE]
+====
+实现提示
+
+轮常量 (CK) 可以动态生成，成本相对较低。
+如果常量的字节被分配一个从 0 到 127 的递增索引，则每个字节的值等于其索引乘以 7 模 256。
+由于结果都限制在 8 位内，模运算是免费的：
+
+	B[n] = n + 2n + 4n;
+       = 8n + ~n + 1;
+====
+
+// 此指令仅将生成的密钥返回到与源相同的元素组。
+// 如果希望在所有向量组中具有相同的密钥，则输入向量组需要包含相同的值，或者需要使用诸如 vrgather 的指令将特定组的输出“广播”到其他组。
+
+// 要处理的元素组数为 `vl`/`EGS`。
+// `vl` 必须设置为要处理的 `SEW=32` 元素数，因此必须是 `EGS=4` 的倍数。 +
+// 同样，`vstart` 必须是 `EGS=4` 的倍数。
+
+////
+.系统参数
+[%autowidth]
+[%header,cols="^2,^2"]
+|===
+|FK
+|常量
+
+| 0 | A3B1BAC6
+| 1 | 56AA3350 
+| 2 | 677D9197
+| 3 | B27022DC
+|===
+////
+
+操作::
+[source,sail]
+--
+
+function clause execute (vsm4k(uimm, vs2)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+  let B : bits(32) = 0;
+  let S : bits(32) = 0;
+  let rk4 : bits(32) = 0;
+  let rk5 : bits(32) = 0;
+  let rk6 : bits(32) = 0;
+  let rk7 : bits(32) = 0;
+  let rnd : bits(3) = uimm[2:0]; // 低 3 位
+
+  foreach (i from eg_start to eg_len-1) {
+    let (rk3 @ rk2 @ rk1 @ rk0) : bits(128) = get_velem(vs2, 128, i);
+    
+    B = rk1 ^ rk2 ^ rk3 ^ ck(4 * rnd);
+    S = sm4_subword(B);
+    rk4 = ROUND_KEY(rk0, S);
+
+    B = rk2 ^ rk3 ^ rk4 ^ ck(4 * rnd + 1);
+    S = sm4_subword(B);
+    rk5 = ROUND_KEY(rk1, S);
+
+    B = rk3 ^ rk4 ^ rk5 ^ ck(4 * rnd + 2);
+    S = sm4_subword(B);
+    rk6 = ROUND_KEY(rk2, S);
+
+    B = rk4 ^ rk5 ^ rk6 ^ ck(4 * rnd + 3);
+    S = sm4_subword(B);
+    rk7 = ROUND_KEY(rk3, S);
+
+    // 更新目标寄存器。
+   set_velem(vd, EGW=128, i, (rk7 @ rk6 @ rk5 @ rk4));
+  }
+  RETIRE_SUCCESS
+  }
+}
+
+val round_key : bits(32) -> bits(32)
+function ROUND_KEY(X, S) = ((X) ^ ((S) ^ ROL32((S), 13) ^ ROL32((S), 23)))
+
+// SM4 常量密钥 (CK)
+let ck : list(bits(32)) = [|
+	0x00070E15, 0x1C232A31, 0x383F464D, 0x545B6269,
+	0x70777E85, 0x8C939AA1, 0xA8AFB6BD, 0xC4CBD2D9,
+	0xE0E7EEF5, 0xFC030A11, 0x181F262D, 0x343B4249,
+	0x50575E65, 0x6C737A81, 0x888F969D, 0xA4ABB2B9,
+	0xC0C7CED5, 0xDCE3EAF1, 0xF8FF060D, 0x141B2229,
+	0x30373E45, 0x4C535A61, 0x686F767D, 0x848B9299,
+	0xA0A7AEB5, 0xBCC3CAD1, 0xD8DFE6ED, 0xF4FB0209,
+	0x10171E25, 0x2C333A41, 0x484F565D, 0x646B7279
+  |]
+};
+
+--
+
+包含于::
+<<zvks>>, <<zvksc>>, <<zvksed>>, <<zvksg>>
+
+<<<
+
+[[insns-vsm4r, SM4 块密码轮次]]
+==== vsm4r.[vv,vs]
+
+概要::
+向量 SM4 轮次
+
+助记符::
+vsm4r.vv vd, vs2 +
+vsm4r.vs vd, vs2
+
+编码（向量-向量）::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '10000'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101000'},
+]}
+....
+
+编码（向量-标量）::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-VE'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPMVV'},
+{bits: 5, name: '10000'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: '1'},
+{bits: 6, name: '101001'},
+]}
+....
+保留编码::
+* `SEW` 为除 32 以外的任何值
+* 仅适用于 `.vs` 形式：`vd` 寄存器组与 `vs2` 寄存器组重叠
+
+参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2,2,2"]
+|===
+|寄存器
+|方向
+|EGW
+|EGS
+|EEW
+|定义
+
+| Vd   | 输入  | 128  | 4 | 32 | 当前状态 X[0:3]
+| Vs2  | 输入  | 128  | 4 | 32 | 轮密钥 rk[0:3]
+| Vd   | 输出  | 128  | 4 | 32 | 下一状态 X'[0:3]
+|===
+
+描述::
+执行四轮 SM4 加密/解密。
+
+当前状态的四个字作为一个 4 元素组从 `vd` 中读取，
+轮密钥从 `vs2` 中的相应 4 元素组（向量-向量形式）或 `vs2` 中的标量元素组（向量-标量形式）读取。
+通过迭代地将状态的最后三个字与相应的轮密钥进行异或，执行字节替换，然后在此值的旋转版本与相应的当前状态之间执行异或，生成下一状态的四个字。
+
+[NOTE]
+====
+在 SM4 中，加密和解密是相同的，除了解密以相反的顺序消耗轮密钥。
+====
+
+[NOTE]
+====
+在加密的前四轮中，_当前状态_ 是明文。
+在解密的前四轮中，_当前状态_ 是密文。
+在所有后续轮次中，_当前状态_ 是前四轮的 _下一状态_。
+====
+
+// 要处理的元素组数为 `vl`/`EGS`。
+// `vl` 必须设置为要处理的 `SEW=32` 元素数，因此必须是 `EGS=4` 的倍数。 +
+// 同样，`vstart` 必须是 `EGS=4` 的倍数。
+
+操作::
+[source,pseudocode]
+--
+function clause execute (VSM4R(vd, vs2)) = {
+  if(LMUL*VLEN < EGW)  then {
+    handle_illegal();  // 非法指令异常
+    RETIRE_FAIL
+  } else {
+
+  eg_len = (vl/EGS)
+  eg_start = (vstart/EGS)
+  
+ let B  : bits(32) = 0;
+ let S  : bits(32) = 0;
+ let rk0 : bits(32) = 0;
+ let rk1 : bits(32) = 0;
+ let rk2 : bits(32) = 0;
+ let rk3 : bits(32) = 0;
+ let x0 : bits(32) = 0;
+ let x1 : bits(32) = 0;
+ let x2 : bits(32) = 0;
+ let x3 : bits(32) = 0;
+ let x4 : bits(32) = 0;
+ let x5 : bits(32) = 0;
+ let x6 : bits(32) = 0;
+ let x7 : bits(32) = 0;
+
+ let keyelem : bits(32) = 0;
+
+  foreach (i from eg_start to eg_len-1) {
+    keyelem = if suffix == "vv" then i else 0;
+    {rk3 @ rk2 @ rk1 @ rk0} : bits(128) = get_velem(vs2, EGW=128, keyelem);
+    {x3 @ x2 @ x1 @ x0} : bits(128) = get_velem(vd, EGW=128, i);
+
+    B  = x1 ^ x2 ^ x3 ^ rk0;
+    S = sm4_subword(B);
+    x4 = sm4_round(x0, S);
+
+    B = x2 ^ x3 ^ x4 ^ rk1;
+    S = sm4_subword(B);
+    x5= sm4_round(x1, S);
+
+    B = x3 ^ x4 ^ x5 ^ rk2;
+    S = sm4_subword(B);
+    x6 = sm4_round(x2, S);
+
+    B = x4 ^ x5 ^ x6 ^ rk3;
+    S = sm4_subword(B);
+    x7 = sm4_round(x3, S);
+
+    set_velem(vd, EGW=128, i, (x7 @ x6 @ x5 @ x4));
+
+  }
+  RETIRE_SUCCESS
+  }
+}
+
+val sm4_round : bits(32) -> bits(32)
+function sm4_round(X, S) = \
+  ((X) ^ ((S) ^ ROL32((S), 2) ^ ROL32((S), 10) ^ ROL32((S), 18) ^ ROL32((S), 24)))
+
+--
+
+包含于::
+<<zvks>>, <<zvksc>>, <<zvksed>>, <<zvksg>>
+
+<<<
+
+[[insns-vwsll, 向量宽移位左逻辑]]
+==== vwsll.[vv,vx,vi]
+
+概要::
+向量宽移位左逻辑（按向量/标量/立即数）。
+
+助记符::
+vwsll.vv vd, vs2, vs1, vm +
+vwsll.vx vd, vs2, rs1, vm +
+vwsll.vi vd, vs2, uimm, vm
+
+编码（向量-向量）::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVV'},
+{bits: 5, name: 'vs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '110101'},
+]}
+....
+
+编码（向量-标量）::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVX'},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '110101'},
+]}
+....
+
+编码（向量-立即数）::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 'OP-V'},
+{bits: 5, name: 'vd'},
+{bits: 3, name: 'OPIVI'},
+{bits: 5, name: 'uimm[4:0]'},
+{bits: 5, name: 'vs2'},
+{bits: 1, name: 'vm'},
+{bits: 6, name: '110101'},
+]}
+....
+
+向量-向量参数::
+
+[%autowidth]
+[%header,cols="4,2,2"]
+|===
+|寄存器
+|方向
+|定义
+
+| Vs1 | 输入  | 移位量
+| Vs2 | 输入  | 数据
+| Vd  | 输出  | 移位后的数据 
+|===
+
+向量-标量/立即数参数::
+
+[%autowidth]
+[%header,cols="4,2,2,2"]
+|===
+|寄存器
+|方向
+|EEW
+|定义
+
+| Rs1/imm | 输入  | SEW   | 移位量
+| Vs2     | 输入  | SEW   | 数据
+| Vd      | 输出  | 2*SEW | 移位后的数据
+|===
+
+描述:: 
+对 `vs2` 的每个元素执行宽移位左逻辑。
+
+`vs2` 中的元素被零扩展到 2*`SEW` 位，然后按由
+`vs1` 的相应元素（向量-向量）、整数寄存器 `rs1`
+（向量-标量）或立即数值（向量-立即数）指定的移位量左移。
+仅使用移位量值的低 log2(2*`SEW`) 位，所有其他
+位被忽略。
+
+操作::
+[source,sail]
+--
+function clause execute (VWSLL_VV(vs2, vs1, vd)) = {
+  foreach (i from vstart to vl - 1) {
+    set_velem(vd, EEW=2*SEW, i,
+      get_velem(vs2, i) << (get_velem(vs1, i) & ((2*SEW)-1))
+    )
+  }
+  RETIRE_SUCCESS
+}
+
+function clause execute (VWSLL_VX(vs2, rs1, vd)) = {
+  foreach (i from vstart to vl - 1) {
+    set_velem(vd, EEW=2*SEW, i, 
+      get_velem(vs2, i) << (X(rs1) & ((2*SEW)-1))
+    )
+  }
+  RETIRE_SUCCESS
+}
+
+function clause execute (VWSLL_VI(vs2, uimm[4:0], vd)) = {
+  foreach (i from vstart to vl - 1) {
+    set_velem(vd, EEW=2*SEW, i, 
+      get_velem(vs2, i) << (uimm[4:0] & ((2*SEW)-1))
+    )
+  }
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+<<zvbb>>
+
+<<<
+
+
+[[crypto_vector_instructions]]
+=== 向量加密指令
+
+OP-VE (0x77)
+向量加密指令，除 Zvbb 和 Zvbc
+
+// [cols="4,1,1,1,8,4,1,1,8,4,1,1,8"]
+[cols="4,1,1,1,1,4,1,1,1,4,1,1,1"]
+|===
+5+^|整数 4+^|整数 4+^| 浮点
+
+| funct3 | | | |            | funct3 | | |             | funct3 | | |
+| OPIVV  |V| | |            | OPMVV  |V| |             | OPFVV  |V| |
+| OPIVX  | |X| |            | OPMVX  | |X|             | OPFVF  | |F|
+| OPIVI  | | |I|            |        | | |             |        | | |
+|===
+
+// [cols="4,1,1,1,8,4,1,1,8,4,1,1,8"]
+[cols="6,1,1,1,1,6,1,1,6,6,1,1,1"]
+
+|===
+5+^| funct6                  4+^| funct6                 4+^| funct6
+
+|100000||||| 100000 |V| | vsm3me      | 100000 | | |             
+| 100001 | | | |            | 100001 |V| | vsm4k.vi    | 100001 | | |             
+| 100010 | | | |            | 100010 |V| | vaeskf1.vi  | 100010 | | |             
+| 100011 | | | |            | 100011 | | |             | 100011 | | |
+| 100100 | | | |            | 100100 | | |             | 100100 | | |             
+| 100101 | | | |            | 100101 | | |             | 100101 | | |
+| 100110 | | | |            | 100110 | | |             | 100110 | | |
+| 100111 | | | |            | 100111 | | |             | 100111 | | |             
+|        | | | |            |        | | |             |        | | |
+| 101000 | | | |            | 101000 |V| | *VAES.vv*   | 101000 | | |             
+| 101001 | | | |            | 101001 |V| | *VAES.vs*   | 101001 | | |             
+| 101010 | | | |            | 101010 |V| | vaeskf2.vi  | 101010 | | |             
+| 101011 | | | |            | 101011 |V| | vsm3c.vi    | 101011 | | |             
+| 101100 | | | |            | 101100 |V| | vghsh      | 101100 | | |             
+| 101101 | | | |            | 101101 |V| | vsha2ms     | 101101 | | |             
+| 101110 | | | |            | 101110 |V| | vsha2ch     | 101110 | | |             
+| 101111 | | | |            | 101111 |V| | vsha2cl     | 101111 | | |             
+|===
+
+<<<
+
+.VAES.vv 和 VAES.vs 编码空间
+[cols="2,14"]
+|===
+|vs1|
+
+| 00000 | vaesdm
+| 00001 | vaesdf
+| 00010 | vaesem
+| 00011 | vaesef
+| 00111 | vaesz
+| 10000 | vsm4r
+| 10001 | vgmul
+|===
+
+[[crypto_vector_instructions_Zvbb_Zvbc]]
+=== 向量位操作和无进位乘法指令
+
+OP-V (0x57)
+*Zvbb*、*Zvkb* 和 *Zvbc* 向量指令 *加粗*
+//[%auto-width]
+[%autowidth,cols="4,1,1,1,8,4,1,1,8,4,1,1,8"]
+|===
+5+| 整数               4+| 整数               4+| 浮点
+
+| funct3 | | | |            | funct3 | | |             | funct3 | | |
+| OPIVV  |V| | |            | OPMVV  |V| |             | OPFVV  |V| |
+| OPIVX  | |X| |            | OPMVX  | |X|             | OPFVF  | |F|
+| OPIVI  | | |I|            |        | | |             |        | | |
+|===
+
+//[%auto-width]
+[%autowidth,cols="4,1,1,1,8,4,1,1,8,4,1,1,8"]
+|===
+5+| funct6                  4+| funct6                 4+| funct6
+
+| 000000 |V|X|I| vadd       | 000000 |V| | vredsum     | 000000 |V|F| vfadd
+| 000001 |V|X| | *vandn*    | 000001 |V| | vredand     | 000001 |V| | vfredusum
+| 000010 |V|X| | vsub       | 000010 |V| | vredor      | 000010 |V|F| vfsub
+| 000011 | |X|I| vrsub      | 000011 |V| | vredxor     | 000011 |V| | vfredosum
+| 000100 |V|X| | vminu      | 000100 |V| | vredminu    | 000100 |V|F| vfmin
+| 000101 |V|X| | vmin       | 000101 |V| | vredmin     | 000101 |V| | vfredmin
+| 000110 |V|X| | vmaxu      | 000110 |V| | vredmaxu    | 000110 |V|F| vfmax
+| 000111 |V|X| | vmax       | 000111 |V| | vredmax     | 000111 |V| | vfredmax
+| 001000 | | | |            | 001000 |V|X| vaaddu      | 001000 |V|F| vfsgnj
+| 001001 |V|X|I| vand       | 001001 |V|X| vaadd       | 001001 |V|F| vfsgnjn
+| 001010 |V|X|I| vor        | 001010 |V|X| vasubu      | 001010 |V|F| vfsgnjx
+| 001011 |V|X|I| vxor       | 001011 |V|X| vasub       | 001011 | | |
+| 001100 |V|X|I| vrgather   | 001100 |V|X| *vclmul*    | 001100 | | |
+| 001101 | | | |            | 001101 |V|X| *vclmulh*   | 001101 | | |
+| 001110 | |X|I| vslideup   | 001110 | |X| vslide1up   | 001110 | |F| vfslide1up
+| 001110 |V| | | vrgatherei16|        | | |             |        | | |
+| 001111 | |X|I| vslidedown | 001111 | |X| vslide1down | 001111 | |F| vfslide1down
+|===
+
+[%autowidth,cols="4,1,1,1,8,4,1,1,8,4,1,1,8"]
+|===
+5+| funct6                  4+| funct6                 4+| funct6
+
+| 010000 |V|X|I| vadc       | 010000 |V| | VWXUNARY0   | 010000 |V| | VWFUNARY0
+|        | | | |            | 010000 | |X| VRXUNARY0   | 010000 | |F| VRFUNARY0
+| 010001 |V|X|I| vmadc      | 010001 | | |             | 010001 | | |
+| 010010 |V|X| | vsbc       | 010010 |V| | VXUNARY0    | 010010 |V| | VFUNARY0
+| 010011 |V|X| | vmsbc      | 010011 | | |             | 010011 |V| | VFUNARY1
+| 010100 |V|X| | *vror*     | 010100 |V| | VMUNARY0    | 010100 | | |
+| 010101 |V|X| | *vrol*     | 010101 | | |             | 010101 | | |
+| 01010x | | |I| *vror*     |        | | |             |        | | |
+| 010110 | | | |            | 010110 | | |             | 010110 | | |
+| 010111 |V|X|I| vmerge/vmv | 010111 |V| | vcompress   | 010111 | |F| vfmerge/vfmv
+| 011000 |V|X|I| vmseq      | 011000 |V| | vmandn      | 011000 |V|F| vmfeq
+| 011001 |V|X|I| vmsne      | 011001 |V| | vmand       | 011001 |V|F| vmfle
+| 011010 |V|X| | vmsltu     | 011010 |V| | vmor        | 011010 | | |
+| 011011 |V|X| | vmslt      | 011011 |V| | vmxor       | 011011 |V|F| vmflt
+| 011100 |V|X|I| vmsleu     | 011100 |V| | vmorn       | 011100 |V|F| vmfne
+| 011101 |V|X|I| vmsle      | 011101 |V| | vmnand      | 011101 | |F| vmfgt
+| 011110 | |X|I| vmsgtu     | 011110 |V| | vmnor       | 011110 | | |
+| 011111 | |X|I| vmsgt      | 011111 |V| | vmxnor      | 011111 | |F| vmfge
+|===
+
+[%autowidth,cols="4,1,1,1,8,4,1,1,8,4,1,1,8"]
+|===
+5+| funct6                  4+| funct6                 4+| funct6
+
+| 100000 |V|X|I| vsaddu     | 100000 |V|X| vdivu       | 100000 |V|F| vfdiv
+| 100001 |V|X|I| vsadd      | 100001 |V|X| vdiv        | 100001 | |F| vfrdiv
+| 100010 |V|X| | vssubu     | 100010 |V|X| vremu       | 100010 | | |
+| 100011 |V|X| | vssub      | 100011 |V|X| vrem        | 100011 | | |
+| 100100 | | | |            | 100100 |V|X| vmulhu      | 100100 |V|F| vfmul
+| 100101 |V|X|I| vsll       | 100101 |V|X| vmul        | 100101 | | |
+| 100110 | | | |            | 100110 |V|X| vmulhsu     | 100110 | | |
+| 100111 |V|X| | vsmul      | 100111 |V|X| vmulh       | 100111 | |F| vfrsub
+|        | | |I| vmv<nr>r   |        | | |             |        | | |
+| 101000 |V|X|I| vsrl       | 101000 | | |             | 101000 |V|F| vfmadd
+| 101001 |V|X|I| vsra       | 101001 |V|X| vmadd       | 101001 |V|F| vfnmadd
+| 101010 |V|X|I| vssrl      | 101010 | | |             | 101010 |V|F| vfmsub
+| 101011 |V|X|I| vssra      | 101011 |V|X| vnmsub      | 101011 |V|F| vfnmsub
+| 101100 |V|X|I| vnsrl      | 101100 | | |             | 101100 |V|F| vfmacc
+| 101101 |V|X|I| vnsra      | 101101 |V|X| vmacc       | 101101 |V|F| vfnmacc
+| 101110 |V|X|I| vnclipu    | 101110 | | |             | 101110 |V|F| vfmsac
+| 101111 |V|X|I| vnclip     | 101111 |V|X| vnmsac      | 101111 |V|F| vfnmsac
+|===
+
+[%autowidth,cols="4,1,1,1,8,4,1,1,8,4,1,1,8"]
+|===
+5+| funct6                  4+| funct6                 4+| funct6
+
+| 110000 |V| | | vwredsumu  | 110000 |V|X| vwaddu      | 110000 |V|F| vfwadd
+| 110001 |V| | | vwredsum   | 110001 |V|X| vwadd       | 110001 |V| | vfwredusum
+| 110010 | | | |            | 110010 |V|X| vwsubu      | 110010 |V|F| vfwsub
+| 110011 | | | |            | 110011 |V|X| vwsub       | 110011 |V| | vfwredosum
+| 110100 | | | |            | 110100 |V|X| vwaddu.w    | 110100 |V|F| vfwadd.w
+| 110101 |V|X|I| *vwsll*    | 110101 |V|X| vwadd.w     | 110101 | | |
+| 110110 | | | |            | 110110 |V|X| vwsubu.w    | 110110 |V|F| vfwsub.w
+| 110111 | | | |            | 110111 |V|X| vwsub.w     | 110111 | | |
+| 111000 | | | |            | 111000 |V|X| vwmulu      | 111000 |V|F| vfwmul
+| 111001 | | | |            | 111001 | | |             | 111001 | | |
+| 111010 | | | |            | 111010 |V|X| vwmulsu     | 111010 | | |
+| 111011 | | | |            | 111011 |V|X| vwmul       | 111011 | | |
+| 111100 | | | |            | 111100 |V|X| vwmaccu     | 111100 |V|F| vfwmacc
+| 111101 | | | |            | 111101 |V|X| vwmacc      | 111101 |V|F| vfwnmacc
+| 111110 | | | |            | 111110 | |X| vwmaccus    | 111110 |V|F| vfwmsac
+| 111111 | | | |            | 111111 |V|X| vwmaccsu    | 111111 |V|F| vfwnmsac
+|===
+
+<<<
+
+//[%auto-width]
+.VXUNARY0 编码空间
+[%autowidth,cols="2,14"]
+|===
+|  vs1  |
+
+| 00010 | vzext.vf8
+| 00011 | vsext.vf8
+| 00100 | vzext.vf4
+| 00101 | vsext.vf4
+| 00110 | vzext.vf2
+| 00111 | vsext.vf2
+| 01000 | *vbrev8*
+| 01001 | *vrev8*
+| 01010 | *vbrev*
+| 01100 | *vclz*
+| 01101 | *vctz*
+| 01110 | *vcpop*
+
+|===
+
+[[crypto_vector_appx_sail]]
+=== 支持的 Sail 代码
+
+本节包含规范中指令描述所引用的支持 Sail 代码。
+建议阅读
+link:https://github.com/rems-project/sail/blob/sail2/manual.pdf[Sail 手册]
+以便更好地理解支持代码。
+
+[source,sail]
+----
+/* 执行 GF 乘法的辅助函数 */
+val xt2 : bits(8) -> bits(8)
+function xt2(x) = {
+  (x << 1) ^ (if bit_to_bool(x[7]) then 0x1b else 0x00)
+}
+
+val xt3 : bits(8) -> bits(8)
+function xt3(x) = x ^ xt2(x)
+
+/* 在 AES MixCols 步骤中将 8 位字段元素乘以 4 位值 */
+val gfmul : (bits(8), bits(4)) -> bits(8)
+function gfmul( x, y) = {
+  (if bit_to_bool(y[0]) then             x    else 0x00) ^
+  (if bit_to_bool(y[1]) then xt2(        x)   else 0x00) ^
+  (if bit_to_bool(y[2]) then xt2(xt2(    x))  else 0x00) ^
+  (if bit_to_bool(y[3]) then xt2(xt2(xt2(x))) else 0x00)
+}
+
+/* 8 位到 32 位的部分 AES Mix Column - 正向 */
+val aes_mixcolumn_byte_fwd : bits(8) -> bits(32)
+function aes_mixcolumn_byte_fwd(so) = {
+  gfmul(so, 0x3) @ so @ so @ gfmul(so, 0x2)
+}
+
+/* 8 位到 32 位的部分 AES Mix Column - 逆向 */
+val aes_mixcolumn_byte_inv : bits(8) -> bits(32)
+function aes_mixcolumn_byte_inv(so) = {
+  gfmul(so, 0xb) @ gfmul(so, 0xd) @ gfmul(so, 0x9) @ gfmul(so, 0xe)
+}
+
+/* 32 位到 32 位的 AES 正向 MixColumn */
+val aes_mixcolumn_fwd : bits(32) -> bits(32)
+function aes_mixcolumn_fwd(x) = {
+  let s0 : bits (8) = x[ 7.. 0];
+  let s1 : bits (8) = x[15.. 8];
+  let s2 : bits (8) = x[23..16];
+  let s3 : bits (8) = x[31..24];
+  let b0 : bits (8) = xt2(s0) ^ xt3(s1) ^    (s2) ^    (s3);
+  let b1 : bits (8) =    (s0) ^ xt2(s1) ^ xt3(s2) ^    (s3);
+  let b2 : bits (8) =    (s0) ^    (s1) ^ xt2(s2) ^ xt3(s3);
+  let b3 : bits (8) = xt3(s0) ^    (s1) ^    (s2) ^ xt2(s3);
+  b3 @ b2 @ b1 @ b0 /* 返回值 */
+}
+
+/* 32 位到 32 位的 AES 逆向 MixColumn */
+val aes_mixcolumn_inv : bits(32) -> bits(32)
+function aes_mixcolumn_inv(x) = {
+  let s0 : bits (8) = x[ 7.. 0];
+  let s1 : bits (8) = x[15.. 8];
+  let s2 : bits (8) = x[23..16];
+  let s3 : bits (8) = x[31..24];
+  let b0 : bits (8) = gfmul(s0, 0xE) ^ gfmul(s1, 0xB) ^ gfmul(s2, 0xD) ^ gfmul(s3, 0x9);
+  let b1 : bits (8) = gfmul(s0, 0x9) ^ gfmul(s1, 0xE) ^ gfmul(s2, 0xB) ^ gfmul(s3, 0xD);
+  let b2 : bits (8) = gfmul(s0, 0xD) ^ gfmul(s1, 0x9) ^ gfmul(s2, 0xE) ^ gfmul(s3, 0xB);
+  let b3 : bits (8) = gfmul(s0, 0xB) ^ gfmul(s1, 0xD) ^ gfmul(s2, 0x9) ^ gfmul(s3, 0xE);
+  b3 @ b2 @ b1 @ b0 /* 返回值 */
+}
+
+val aes_decode_rcon : bits(4) -> bits(32)
+function aes_decode_rcon(r) = {
+  match r {
+    0x0 => 0x00000001,
+    0x1 => 0x00000002,
+    0x2 => 0x00000004,
+    0x3 => 0x00000008,
+    0x4 => 0x00000010,
+    0x5 => 0x00000020,
+    0x6 => 0x00000040,
+    0x7 => 0x00000080,
+    0x8 => 0x0000001b,
+    0x9 => 0x00000036,
+    0xA => 0x00000000,
+    0xB => 0x00000000,
+    0xC => 0x00000000,
+    0xD => 0x00000000,
+    0xE => 0x00000000,
+    0xF => 0x00000000
+  }
+}
+
+/* SM4 SBox - 只有一个 SBox 用于正向和逆向 */
+let sm4_sbox_table : list(bits(8)) = [|
+0xD6, 0x90, 0xE9, 0xFE, 0xCC, 0xE1, 0x3D, 0xB7, 0x16, 0xB6, 0x14, 0xC2, 0x28,
+0xFB, 0x2C, 0x05, 0x2B, 0x67, 0x9A, 0x76, 0x2A, 0xBE, 0x04, 0xC3, 0xAA, 0x44,
+0x13, 0x26, 0x49, 0x86, 0x06, 0x99, 0x9C, 0x42, 0x50, 0xF4, 0x91, 0xEF, 0x98,
+0x7A, 0x33, 0x54, 0x0B, 0x43, 0xED, 0xCF, 0xAC, 0x62, 0xE4, 0xB3, 0x1C, 0xA9,
+0xC9, 0x08, 0xE8, 0x95, 0x80, 0xDF, 0x94, 0xFA, 0x75, 0x8F, 0x3F, 0xA6, 0x47,
+0x07, 0xA7, 0xFC, 0xF3, 0x73, 0x17, 0xBA, 0x83, 0x59, 0x3C, 0x19, 0xE6, 0x85,
+0x4F, 0xA8, 0x68, 0x6B, 0x81, 0xB2, 0x71, 0x64, 0xDA, 0x8B, 0xF8, 0xEB, 0x0F,
+0x4B, 0x70, 0x56, 0x9D, 0x35, 0x1E, 0x24, 0x0E, 0x5E, 0x63, 0x58, 0xD1, 0xA2,
+0x25, 0x22, 0x7C, 0x3B, 0x01, 0x21, 0x78, 0x87, 0xD4, 0x00, 0x46, 0x57, 0x9F,
+0xD3, 0x27, 0x52, 0x4C, 0x36, 0x02, 0xE7, 0xA0, 0xC4, 0xC8, 0x9E, 0xEA, 0xBF,
+0x8A, 0xD2, 0x40, 0xC7, 0x38, 0xB5, 0xA3, 0xF7, 0xF2, 0xCE, 0xF9, 0x61, 0x15,
+0xA1, 0xE0, 0xAE, 0x5D, 0xA4, 0x9B, 0x34, 0x1A, 0x55, 0xAD, 0x93, 0x32, 0x30,
+0xF5, 0x8C, 0xB1, 0xE3, 0x1D, 0xF6, 0xE2, 0x2E, 0x82, 0x66, 0xCA, 0x60, 0xC0,
+0x29, 0x23, 0xAB, 0x0D, 0x53, 0x4E, 0x6F, 0xD5, 0xDB, 0x37, 0x45, 0xDE, 0xFD,
+0x8E, 0x2F, 0x03, 0xFF, 0x6A, 0x72, 0x6D, 0x6C, 0x5B, 0x51, 0x8D, 0x1B, 0xAF,
+0x92, 0xBB, 0xDD, 0xBC, 0x7F, 0x11, 0xD9, 0x5C, 0x41, 0x1F, 0x10, 0x5A, 0xD8,
+0x0A, 0xC1, 0x31, 0x88, 0xA5, 0xCD, 0x7B, 0xBD, 0x2D, 0x74, 0xD0, 0x12, 0xB8,
+0xE5, 0xB4, 0xB0, 0x89, 0x69, 0x97, 0x4A, 0x0C, 0x96, 0x77, 0x7E, 0x65, 0xB9,
+0xF1, 0x09, 0xC5, 0x6E, 0xC6, 0x84, 0x18, 0xF0, 0x7D, 0xEC, 0x3A, 0xDC, 0x4D,
+0x20, 0x79, 0xEE, 0x5F, 0x3E, 0xD7, 0xCB, 0x39, 0x48
+|]
+
+let aes_sbox_fwd_table : list(bits(8)) = [|
+0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe,
+0xd7, 0xab, 0x76, 0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4,
+0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0, 0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7,
+0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15, 0x04, 0xc7, 0x23, 0xc3,
+0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75, 0x09,
+0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3,
+0x2f, 0x84, 0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe,
+0x39, 0x4a, 0x4c, 0x58, 0xcf, 0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85,
+0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8, 0x51, 0xa3, 0x40, 0x8f, 0x92,
+0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2, 0xcd, 0x0c,
+0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19,
+0x73, 0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14,
+0xde, 0x5e, 0x0b, 0xdb, 0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2,
+0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79, 0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5,
+0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08, 0xba, 0x78, 0x25,
+0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86,
+0xc1, 0x1d, 0x9e, 0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e,
+0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf, 0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42,
+0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
+|]
+    
+let aes_sbox_inv_table : list(bits(8)) = [|
+0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81,
+0xf3, 0xd7, 0xfb, 0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e,
+0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb, 0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23,
+0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e, 0x08, 0x2e, 0xa1, 0x66,
+0x28, 0xd9, 0x24, 0xb2, 0x76, 0x5b, 0xa2, 0x49, 0x6d, 0x8b, 0xd1, 0x25, 0x72,
+0xf8, 0xf6, 0x64, 0x86, 0x68, 0x98, 0x16, 0xd4, 0xa4, 0x5c, 0xcc, 0x5d, 0x65,
+0xb6, 0x92, 0x6c, 0x70, 0x48, 0x50, 0xfd, 0xed, 0xb9, 0xda, 0x5e, 0x15, 0x46,
+0x57, 0xa7, 0x8d, 0x9d, 0x84, 0x90, 0xd8, 0xab, 0x00, 0x8c, 0xbc, 0xd3, 0x0a,
+0xf7, 0xe4, 0x58, 0x05, 0xb8, 0xb3, 0x45, 0x06, 0xd0, 0x2c, 0x1e, 0x8f, 0xca,
+0x3f, 0x0f, 0x02, 0xc1, 0xaf, 0xbd, 0x03, 0x01, 0x13, 0x8a, 0x6b, 0x3a, 0x91,
+0x11, 0x41, 0x4f, 0x67, 0xdc, 0xea, 0x97, 0xf2, 0xcf, 0xce, 0xf0, 0xb4, 0xe6,
+0x73, 0x96, 0xac, 0x74, 0x22, 0xe7, 0xad, 0x35, 0x85, 0xe2, 0xf9, 0x37, 0xe8,
+0x1c, 0x75, 0xdf, 0x6e, 0x47, 0xf1, 0x1a, 0x71, 0x1d, 0x29, 0xc5, 0x89, 0x6f,
+0xb7, 0x62, 0x0e, 0xaa, 0x18, 0xbe, 0x1b, 0xfc, 0x56, 0x3e, 0x4b, 0xc6, 0xd2,
+0x79, 0x20, 0x9a, 0xdb, 0xc0, 0xfe, 0x78, 0xcd, 0x5a, 0xf4, 0x1f, 0xdd, 0xa8,
+0x33, 0x88, 0x07, 0xc7, 0x31, 0xb1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xec, 0x5f,
+0x60, 0x51, 0x7f, 0xa9, 0x19, 0xb5, 0x4a, 0x0d, 0x2d, 0xe5, 0x7a, 0x9f, 0x93,
+0xc9, 0x9c, 0xef, 0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb,
+0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61, 0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6,
+0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d
+|]
+
+/* 查找函数 - 接受一个索引和一个列表，并检索该列表的第 x 个元素。 */
+val sbox_lookup : (bits(8), list(bits(8))) -> bits(8)
+function sbox_lookup(x, table) = {
+  match (x, table) {
+    (0x00, t0::tn) => t0,
+    (   y, t0::tn) => sbox_lookup(x - 0x01, tn)
+  }
+}
+
+/* 执行正向 AES SBox 操作的简便函数。 */
+val aes_sbox_fwd : bits(8) -> bits(8)
+function aes_sbox_fwd(x) = sbox_lookup(x, aes_sbox_fwd_table)
+
+/* 执行逆向 AES SBox 操作的简便函数。 */
+val aes_sbox_inv : bits(8) -> bits(8)
+function aes_sbox_inv(x) = sbox_lookup(x, aes_sbox_inv_table)
+
+/* AES SubWord 函数用于密钥扩展
+ * - 将正向 sbox 应用于输入字中的每个字节。
+ */
+val aes_subword_fwd : bits(32) -> bits(32)
+function aes_subword_fwd(x) = {
+  aes_sbox_fwd(x[31..24]) @
+  aes_sbox_fwd(x[23..16]) @
+  aes_sbox_fwd(x[15.. 8]) @
+  aes_sbox_fwd(x[ 7.. 0])
+}
+
+/* AES 逆向 SubWord 函数。
+ * - 将逆向 sbox 应用于输入字中的每个字节。
+ */
+val aes_subword_inv : bits(32) -> bits(32)
+function aes_subword_inv(x) = {
+  aes_sbox_inv(x[31..24]) @
+  aes_sbox_inv(x[23..16]) @
+  aes_sbox_inv(x[15.. 8]) @
+  aes_sbox_inv(x[ 7.. 0]) 
+}
+
+/* 执行 SM4 SBox 操作的简便函数。 */
+val sm4_sbox : bits(8) -> bits(8)
+function sm4_sbox(x) = sbox_lookup(x, sm4_sbox_table)
+
+val aes_get_column : (bits(128), nat) -> bits(32)
+function aes_get_column(state,c) = (state >> (to_bits(7, 32 * c)))[31..0]
+
+/* 64 位到 64 位的函数，将 AES 正向 sbox 应用于 64 位字中的每个字节。 */
+val aes_apply_fwd_sbox_to_each_byte : bits(64) -> bits(64)
+function aes_apply_fwd_sbox_to_each_byte(x) = {
+  aes_sbox_fwd(x[63..56]) @
+  aes_sbox_fwd(x[55..48]) @
+  aes_sbox_fwd(x[47..40]) @
+  aes_sbox_fwd(x[39..32]) @
+  aes_sbox_fwd(x[31..24]) @
+  aes_sbox_fwd(x[23..16]) @
+  aes_sbox_fwd(x[15.. 8]) @
+  aes_sbox_fwd(x[ 7.. 0])
+}
+
+/* 64 位到 64 位的函数，将 AES 逆向 sbox 应用于 64 位字中的每个字节。 */
+val aes_apply_inv_sbox_to_each_byte : bits(64) -> bits(64)
+function aes_apply_inv_sbox_to_each_byte(x) = {
+  aes_sbox_inv(x[63..56]) @
+  aes_sbox_inv(x[55..48]) @
+  aes_sbox_inv(x[47..40]) @
+  aes_sbox_inv(x[39..32]) @
+  aes_sbox_inv(x[31..24]) @
+  aes_sbox_inv(x[23..16]) @
+  aes_sbox_inv(x[15.. 8]) @
+  aes_sbox_inv(x[ 7.. 0])
+}
+
+/*
+ * AES 全轮变换函数。
+ */
+
+val getbyte : (bits(64), int) -> bits(8)
+function getbyte(x, i) = (x >> to_bits(6, i * 8))[7..0]
+
+val aes_rv64_shiftrows_fwd : (bits(64), bits(64)) -> bits(64)
+function aes_rv64_shiftrows_fwd(rs2, rs1) = {
+  getbyte(rs1, 3) @
+  getbyte(rs2, 6) @
+  getbyte(rs2, 1) @
+  getbyte(rs1, 4) @
+  getbyte(rs2, 7) @
+  getbyte(rs2, 2) @
+  getbyte(rs1, 5) @
+  getbyte(rs1, 0)
+}
+
+val aes_rv64_shiftrows_inv : (bits(64), bits(64)) -> bits(64)
+function aes_rv64_shiftrows_inv(rs2, rs1) = {
+  getbyte(rs2, 3) @
+  getbyte(rs2, 6) @
+  getbyte(rs1, 1) @
+  getbyte(rs1, 4) @
+  getbyte(rs1, 7) @
+  getbyte(rs2, 2) @
+  getbyte(rs2, 5) @
+  getbyte(rs1, 0)
+}
+
+/* 128 位到 128 位的 AES 正向 ShiftRows 变换实现。
+ * 状态的字节 0 是输入列 0，位 7..0。
+ * 状态的字节 5 是输入列 1，位 15..8。
+ */
+val aes_shift_rows_fwd : bits(128) -> bits(128)
+function aes_shift_rows_fwd(x) = {
+  let ic3 : bits(32) = aes_get_column(x, 3); 
+  let ic2 : bits(32) = aes_get_column(x, 2); 
+  let ic1 : bits(32) = aes_get_column(x, 1); 
+  let ic0 : bits(32) = aes_get_column(x, 0); 
+  let oc0 : bits(32) = ic3[31..24] @ ic2[23..16] @ ic1[15.. 8] @ ic0[ 7.. 0];
+  let oc1 : bits(32) = ic0[31..24] @ ic3[23..16] @ ic2[15.. 8] @ ic1[ 7.. 0];
+  let oc2 : bits(32) = ic1[31..24] @ ic0[23..16] @ ic3[15.. 8] @ ic2[ 7.. 0];
+  let oc3 : bits(32) = ic2[31..24] @ ic1[23..16] @ ic0[15.. 8] @ ic3[ 7.. 0];
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 128 位到 128 位的 AES 逆向 ShiftRows 变换实现。
+ * 状态的字节 0 是输入列 0，位 7..0。
+ * 状态的字节 5 是输入列 1，位 15..8。
+ */
+val aes_shift_rows_inv : bits(128) -> bits(128)
+function aes_shift_rows_inv(x) = {
+  let ic3 : bits(32) = aes_get_column(x, 3); /* 在列 3 中 */
+  let ic2 : bits(32) = aes_get_column(x, 2); 
+  let ic1 : bits(32) = aes_get_column(x, 1); 
+  let ic0 : bits(32) = aes_get_column(x, 0); 
+  let oc0 : bits(32) = ic1[31..24] @ ic2[23..16] @ ic3[15.. 8] @ ic0[ 7.. 0];
+  let oc1 : bits(32) = ic2[31..24] @ ic3[23..16] @ ic0[15.. 8] @ ic1[ 7.. 0];
+  let oc2 : bits(32) = ic3[31..24] @ ic0[23..16] @ ic1[15.. 8] @ ic2[ 7.. 0];
+  let oc3 : bits(32) = ic0[31..24] @ ic1[23..16] @ ic2[15.. 8] @ ic3[ 7.. 0];
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 将 AES 的正向子字节步骤应用于 128 位向量
+ * 状态的表示。
+ */
+val aes_subbytes_fwd : bits(128) -> bits(128)
+function aes_subbytes_fwd(x) = {
+  let oc0 : bits(32) = aes_subword_fwd(aes_get_column(x, 0));
+  let oc1 : bits(32) = aes_subword_fwd(aes_get_column(x, 1));
+  let oc2 : bits(32) = aes_subword_fwd(aes_get_column(x, 2));
+  let oc3 : bits(32) = aes_subword_fwd(aes_get_column(x, 3));
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 将 AES 的逆向子字节步骤应用于 128 位向量
+ * 状态的表示。
+ */
+val aes_subbytes_inv : bits(128) -> bits(128)
+function aes_subbytes_inv(x) = {
+  let oc0 : bits(32) = aes_subword_inv(aes_get_column(x, 0));
+  let oc1 : bits(32) = aes_subword_inv(aes_get_column(x, 1));
+  let oc2 : bits(32) = aes_subword_inv(aes_get_column(x, 2));
+  let oc3 : bits(32) = aes_subword_inv(aes_get_column(x, 3));
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 将 AES 的正向 MixColumns 步骤应用于 128 位向量
+ * 状态的表示。
+ */
+val aes_mixcolumns_fwd : bits(128) -> bits(128)
+function aes_mixcolumns_fwd(x) = {
+  let oc0 : bits(32) = aes_mixcolumn_fwd(aes_get_column(x, 0));
+  let oc1 : bits(32) = aes_mixcolumn_fwd(aes_get_column(x, 1));
+  let oc2 : bits(32) = aes_mixcolumn_fwd(aes_get_column(x, 2));
+  let oc3 : bits(32) = aes_mixcolumn_fwd(aes_get_column(x, 3));
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 将 AES 的逆向 MixColumns 步骤应用于 128 位向量
+ * 状态的表示。
+ */
+val aes_mixcolumns_inv : bits(128) -> bits(128)
+function aes_mixcolumns_inv(x) = {
+  let oc0 : bits(32) = aes_mixcolumn_inv(aes_get_column(x, 0));
+  let oc1 : bits(32) = aes_mixcolumn_inv(aes_get_column(x, 1));
+  let oc2 : bits(32) = aes_mixcolumn_inv(aes_get_column(x, 2));
+  let oc3 : bits(32) = aes_mixcolumn_inv(aes_get_column(x, 3));
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 执行 AES 密钥计划的字旋转
+*/
+
+val aes_rotword : bits(32) -> bits(32)
+function aes_rotword(x) = {
+  let a0 : bits (8) = x[ 7.. 0];
+  let a1 : bits (8) = x[15.. 8];
+  let a2 : bits (8) = x[23..16];
+  let a3 : bits (8) = x[31..24];
+  (a0 @ a3 @ a2 @ a1) /* 返回值 */
+}
+
+val brev : bits(SEW) -> bits(SEW)
+function brev(x) = {
+  let output : bits(SEW) = 0;
+  foreach (i from 0 to SEW-8 by 8) 
+    output[i+7..i] = reverse_bits_in_byte(input[i+7..i]);
+  output /* 返回值 */
+}
+
+val reverse_bits_in_byte : bits(8) -> bits(8)
+function reverse_bits_in_byte(x) = {
+  let output : bits(8) = 0;
+  foreach (i from 0 to 7) 
+    output[i] = x[7-i]);
+  output /* 返回值 */
+}
+
+val rev8 : bits(SEW) -> bits(SEW)
+function rev8(x) = {     // 字节序交换
+  let output : bits(SEW) = 0;
+    let j = SEW - 1;
+    foreach (k from 0 to (SEW - 8) by 8) {
+      output[k..(k + 7)] = x[(j - 7)..j];
+      j = j - 8;
+  output /* 返回值 */
+  }
+  RETIRE_SUCCESS
+
+
+val rol32 : bits(32) -> bits(32)
+function ROL32(x,n) = (X << N) | (X >> (32 - N))
+
+val sm4_subword : bits(32) -> bits(32)
+function sm4_subword(x) = {
+  sm4_sbox(x[31..24]) @
+  sm4_sbox(x[23..16]) @
+  sm4_sbox(x[15.. 8]) @
+  sm4_sbox(x[ 7.. 0])
+}
+
+----
