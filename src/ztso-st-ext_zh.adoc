@@ -1,0 +1,24 @@
+[[ztso]]
+== "Ztso" 总存储排序扩展，版本 1.0
+
+本章定义了 RISC-V 总存储排序（RVTSO）内存一致性模型的 "Ztso" 扩展。RVTSO 定义为 RVWMO 的增量，RVWMO 在 <<rvwmo>> 中定义。
+[NOTE]
+====
+_Ztso 扩展旨在促进最初为 x86 或 SPARC 架构编写的代码的移植，这两种架构默认使用 TSO。它还支持本质上提供 RVTSO 行为并希望将此事实暴露给软件的实现。_
+====
+RVTSO 对 RVWMO 进行了以下调整：
+
+* 所有加载操作都表现得如同具有 acquire-RCpc 注释
+* 所有存储操作都表现得如同具有 release-RCpc 注释
+* 所有 AMO 都表现得如同同时具有 acquire-RCsc 和 release-RCsc 注释
+
+[NOTE]
+====
+_这些规则使得除 <<overlapping-ordering, 4-7>> 之外的所有 PPO 规则都变得多余。它们还使得任何没有同时设置 PW 和 SR 的非 I/O 栅栏变得多余。最后，它们还意味着没有内存操作会在任何方向上重新排序超过 AMO。_
+
+_在 RVTSO 的上下文中，与 RVWMO 一样，存储排序注释由 PPO 规则 <<overlapping-ordering, 5-7>> 简洁且完全定义。在这两种内存模型中，<<ax-load>> 允许 hart 将值从其存储缓冲区转发到后续（程序顺序中的）加载，即在它们对其他 hart 可见之前，本地可以转发存储。_
+====
+
+此外，如果实现了 Ztso 扩展，那么 V 扩展和 Zve 扩展系列中的矢量内存指令在指令级别遵循 RVTSO。Ztso 扩展不会加强指令内元素访问的排序。
+
+尽管 Ztso 没有向 ISA 添加新指令，但假设 RVTSO 的代码在不支持 Ztso 的实现上将无法正确运行。仅在 Ztso 下运行的二进制文件应通过二进制文件中的标志进行指示，以便不实现 Ztso 的平台可以简单地拒绝运行它们。
