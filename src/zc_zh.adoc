@@ -1,0 +1,2571 @@
+[#Zc]
+== "Zc*" 代码大小缩减扩展，版本 1.0.0
+
+=== Zc* 概述
+
+Zc* 是一组扩展，定义了现有 C 扩展（Zca、Zcd、Zcf）的子集和仅包含 16 位编码的新扩展。
+
+Zcm* 都重用了 _c.fld_、_c.fsd_、_c.fldsp_、_c.fsdsp_ 的编码。
+
+.Zc* 扩展概述
+[width="100%",options=header,cols="3,1,1,1,1,1,1"]
+|====================================================================================
+|指令          |Zca     |Zcf     |Zcd     |Zcb     |Zcmp    |Zcmt
+7+|*Zca 扩展被添加为引用 C 扩展中不包括浮点加载和存储的指令*
+|C 不包括 c.f* |是      |        |        |        |        |
+7+|*Zcf 扩展被添加为引用压缩的单精度浮点加载/存储*
+|c.flw         |        |rv32    |        |        |        |
+|c.flwsp       |        |rv32    |        |        |        |
+|c.fsw         |        |rv32    |        |        |        |
+|c.fswsp       |        |rv32    |        |        |        |
+7+|*Zcd 扩展被添加为引用压缩的双精度浮点加载/存储*
+|c.fld         |        |        |是      |        |        |
+|c.fldsp       |        |        |是      |        |        |
+|c.fsd         |        |        |是      |        |        |
+|c.fsdsp       |        |        |是      |        |        |
+7+|*适用于所有架构的简单操作*
+|c.lbu         |        |        |        |是      |        |
+|c.lh          |        |        |        |是      |        |
+|c.lhu         |        |        |        |是      |        |
+|c.sb          |        |        |        |是      |        |
+|c.sh          |        |        |        |是      |        |
+|c.zext.b      |        |        |        |是      |        |
+|c.sext.b      |        |        |        |是      |        |
+|c.zext.h      |        |        |        |是      |        |
+|c.sext.h      |        |        |        |是      |        |
+|c.zext.w      |        |        |        |是      |        |
+|c.mul         |        |        |        |是      |        |
+|c.not         |        |        |        |是      |        |
+7+|*PUSH/POP 和双移动，重叠 _c.fsdsp_。复杂操作，适用于嵌入式 CPU*
+|cm.push       |        |        |        |        |是      |
+|cm.pop        |        |        |        |        |是      |
+|cm.popret     |        |        |        |        |是      |
+|cm.popretz    |        |        |        |        |是      |
+|cm.mva01s     |        |        |        |        |是      |
+|cm.mvsa01     |        |        |        |        |是      |
+7+|*表跳转，重叠 _c.fsdsp_。复杂操作，适用于嵌入式 CPU*
+|cm.jt         |        |        |        |        |        |是
+|cm.jalt       |        |        |        |        |        |是
+|====================================================================================
+
+[#C]
+=== C
+
+C 扩展是以下扩展的超集：
+
+* Zca
+* 如果指定 F，则为 Zcf（仅 RV32）
+* 如果指定 D，则为 Zcd
+
+由于 C 定义了与 Zca、Zcf 和 Zcd 相同的指令，规则是：
+
+* C 总是意味着 Zca
+* C+F 意味着 Zcf（仅 RV32）
+* C+D 意味着 Zcd
+
+[reftext="Zce"]
+=== Zce
+
+Zce 扩展旨在用于微控制器，并包括所有相关的 Zc 扩展。
+
+* 在 RV32 上指定 Zce 而不包括 F 包括 Zca、Zcb、Zcmp、Zcmt
+* 在 RV32 上指定 Zce 并包括 F 包括 Zca、Zcb、Zcmp、Zcmt 和 Zcf
+* 在 RV64 上指定 Zce 总是包括 Zca、Zcb、Zcmp、Zcmt
+** Zcf 不存在于 RV64
+
+因此，常见的 ISA 字符串可以更新为包含相关的 Zc 扩展，例如：
+
+* RV32IMC 变为 RV32IM_Zce
+* RV32IMCF 变为 RV32IMF_Zce
+
+[#misaC]
+=== MISA.C
+
+如果选择了以下扩展，则设置 MISA.C：
+
+* Zca 并且不包括 F
+* Zca、Zcf 并且指定了 F（仅 RV32）
+* Zca、Zcf 和 Zcd 如果指定了 D（仅 RV32）
+** 此配置排除 Zcmp、Zcmt
+* Zca、Zcd 如果指定了 D（仅 RV64）
+** 此配置排除 Zcmp、Zcmt
+
+[reftext="Zca"]
+=== Zca
+
+Zca 扩展被添加为引用 C 扩展中不包括浮点加载和存储的指令。
+
+因此，它 _排除_ 所有 16 位浮点加载和存储：_c.flw_、_c.flwsp_、_c.fsw_、_c.fswsp_、_c.fld_、_c.fldsp_、_c.fsd_、_c.fsdsp_。
+
+[NOTE]
+====
+C 扩展仅在同时指定 D 和 F 时包括 F/D 指令
+====
+
+[reftext="Zcf"]
+=== Zcf（仅 RV32）
+
+Zcf 是现有的压缩单精度浮点加载和存储：_c.flw_、_c.flwsp_、_c.fsw_、_c.fswsp_。
+
+Zcf 仅与 RV32 相关，不能在 RV64 上指定。
+
+Zcf 扩展依赖于 <<Zca>> 和 F 扩展。
+
+[reftext="Zcd"]
+=== Zcd
+
+Zcd 是现有的压缩双精度浮点加载和存储：_c.fld_、_c.fldsp_、_c.fsd_、_c.fsdsp_。
+
+Zcd 扩展依赖于 <<Zca>> 和 D 扩展。
+
+[reftext="Zcb"]
+=== Zcb
+
+Zcb 具有简单的代码大小节省指令，易于在所有 CPU 上实现。
+
+所有编码目前保留给所有架构，并且与任何现有扩展没有冲突。
+
+注意：Zcb 可以在 _任何_ CPU 上实现，因为这些指令是现有 32 位指令的 16 位版本，来自应用类配置文件。
+
+Zcb 扩展依赖于 <<Zca>> 扩展。
+
+如单个指令页面所示，Zcb 中的许多指令依赖于实现另一个扩展。例如，_c.mul_ 仅在实现 M 或 Zmmul 时实现，_c.sext.b_ 仅在实现 Zbb 时实现。
+
+_c.mul_ 编码使用 CA 寄存器格式以及其他指令，例如 _c.sub_、_c.xor_ 等。
+
+[NOTE]
+
+  _c.sext.w_ 是 _c.addiw rd, 0_（RV64）的伪指令
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+|是
+|是
+|c.lbu _rd'_, uimm(_rs1'_)
+|<<#insns-c_lbu>>
+
+|是
+|是
+|c.lhu _rd'_, uimm(_rs1'_)
+|<<#insns-c_lhu>>
+
+|是
+|是
+|c.lh _rd'_, uimm(_rs1'_)
+|<<#insns-c_lh>>
+
+|是
+|是
+|c.sb _rs2'_, uimm(_rs1'_)
+|<<#insns-c_sb>>
+
+|是
+|是
+|c.sh _rs2'_, uimm(_rs1'_)
+|<<#insns-c_sh>>
+
+|是
+|是
+|c.zext.b _rsd'_
+|<<#insns-c_zext_b>>
+
+|是
+|是
+|c.sext.b _rsd'_
+|<<#insns-c_sext_b>>
+
+|是
+|是
+|c.zext.h _rsd'_
+|<<#insns-c_zext_h>>
+
+|是
+|是
+|c.sext.h _rsd'_
+|<<#insns-c_sext_h>>
+
+|
+|是
+|c.zext.w _rsd'_
+|<<#insns-c_zext_w>>
+
+|是
+|是
+|c.not _rsd'_
+|<<#insns-c_not>>
+
+|是
+|是
+|c.mul _rsd'_, _rs2'_
+|<<#insns-c_mul>>
+
+|===
+
+<<<
+
+[#Zcmp]
+=== Zcmp
+
+Zcmp 扩展是一组可以作为一系列现有 32 位 RISC-V 指令执行的指令。
+
+此扩展重用了 _c.fsdsp_ 的一些编码。因此，它与 <<Zcd>> 不兼容，
+ 当 C 和 D 扩展同时存在时包括 Zcd。
+
+注意：Zcmp 主要针对嵌入式类 CPU，由于实现复杂性。此外，它与架构类配置文件不兼容。
+
+Zcmp 扩展依赖于 <<Zca>> 扩展。
+
+PUSH/POP 汇编语法使用几个变量，其含义如下：
+
+* _reg_list_ 是包含 1 到 13 个寄存器（ra 和 0 到 12 个 s 寄存器）的列表
+** 有效值：{ra}、{ra, s0}、{ra, s0-s1}、{ra, s0-s2}、...、{ra, s0-s8}、{ra, s0-s9}、{ra, s0-s11}
+** 注意 {ra, s0-s10} 是 _无效_ 的，给出 12 个列表而不是 13 个，以便更好地编码
+* _stack_adj_ 是堆栈帧的总大小。
+** 有效值随寄存器列表长度和特定编码而变化，详见指令页面。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+|是
+|是
+|cm.push _{reg_list}, -stack_adj_
+|<<#insns-cm_push>>
+
+|是
+|是
+|cm.pop _{reg_list}, stack_adj_
+|<<#insns-cm_pop>>
+
+|是
+|是
+|cm.popret _{reg_list}, stack_adj_
+|<<#insns-cm_popret>>
+
+|是
+|是
+|cm.popretz _{reg_list}, stack_adj_
+|<<#insns-cm_popretz>>
+
+|是
+|是
+|cm.mva01s _rs1', rs2'_
+|<<#insns-cm_mva01s>>
+
+|是
+|是
+|cm.mvsa01 _r1s', r2s'_
+|<<#insns-cm_mvsa01>>
+
+|===
+
+<<<
+
+[#Zcmt]
+=== Zcmt
+
+Zcmt 添加了表跳转指令，并添加了 jvt CSR。如果实现了 Smstateen，则 jvt CSR 需要状态启用。详见 <<csrs-jvt>>。
+
+此扩展重用了 _c.fsdsp_ 的一些编码。因此，它与 <<Zcd>> 不兼容，
+ 当 C 和 D 扩展同时存在时包括 Zcd。
+
+注意：Zcmt 主要针对嵌入式类 CPU，由于实现复杂性。此外，它与 RVA 配置文件不兼容。
+
+Zcmt 扩展依赖于 <<Zca>> 和 Zicsr 扩展。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+|是
+|是
+|cm.jt _index_
+|<<#insns-cm_jt>>
+
+|是
+|是
+|cm.jalt _index_
+|<<#insns-cm_jalt>>
+
+|===
+
+[#Zc_formats]
+=== Zc 指令格式
+
+本规范中的几条指令使用以下新指令格式。
+
+[%header,cols="2,3,2,1,1,1,1,1,1,1,1,1,1"]
+|=====================================================================
+| 格式   | 指令                | 15:10  | 9  | 8 | 7   | 6 | 5 | 4   | 3 | 2  | 1 | 0
+| CLB    | c.lbu              | funct6 3+| rs1'    2+| uimm    3+| rd'    2+| op
+| CSB    | c.sb               | funct6 3+| rs1'    2+| uimm    3+| rs2'   2+| op
+| CLH    | c.lhu, c.lh        | funct6 3+| rs1'    | funct1 | uimm 3+| rd'  2+| op
+| CSH    | c.sh               | funct6 3+| rs1'    | funct1 | uimm 3+| rs2' 2+| op
+| CU     | c.[sz]ext.*, c.not | funct6 3+| rd'/rs1' 5+| funct5            2+| op
+| CMMV   | cm.mvsa01 cm.mva01s| funct6 3+| r1s'     2+| funct2 3+| r2s'   2+| op
+| CMJT   | cm.jt cm.jalt      | funct6 8+| index                          2+| op
+| CMPP   | cm.push*, cm.pop*  | funct6 2+| funct2 4+| urlist   2+| spimm  2+| op
+|=====================================================================
+
+[NOTE]
+====
+c.mul 使用现有的 CA 格式。
+====
+
+<<<
+
+[#Zcb_instructions]
+=== Zcb 指令
+
+[#insns-c_lbu,reftext="加载无符号字节，16 位编码"]
+==== c.lbu
+
+概要：
+
+加载无符号字节，16 位编码
+
+助记符：
+
+c.lbu _rd'_, _uimm_(_rs1'_)
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x0, attr: ['C0'] },
+    { bits:  3, name: 'rd\'' },
+    { bits:  2, name: 'uimm[0|1]' },
+    { bits:  3, name: 'rs1\'' },
+    { bits:  3, name: 0x0 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+立即数偏移如下形成：
+
+[source,sail]
+--
+  uimm[31:2] = 0;
+  uimm[1]    = encoding[5];
+  uimm[0]    = encoding[6];
+--
+
+描述：
+
+此指令从由 _rs1'_ 和零扩展的立即数 _uimm_ 形成的内存地址加载一个字节。结果字节被零扩展到 XLEN 位，并写入 _rd'_。
+
+[NOTE]
+====
+_rd'_ 和 _rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+无
+//32 位等效：
+//<<insns-lbu>>
+
+操作：
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+X(rdc) = EXTZ(mem[X(rs1c)+EXTZ(uimm)][7..0]);
+----
+
+<<<
+[#insns-c_lhu,reftext="加载无符号半字，16 位编码"]
+==== c.lhu
+
+概要：
+
+加载无符号半字，16 位编码
+
+助记符：
+
+c.lhu _rd'_, _uimm_(_rs1'_)
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x0, attr: ['C0'] },
+    { bits:  3, name: 'rd\'' },
+    { bits:  1, name: 'uimm[1]' },
+    { bits:  1, name: 0x0 },
+    { bits:  3, name: 'rs1\'' },
+    { bits:  3, name: 0x1 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+立即数偏移如下形成：
+
+[source,sail]
+----
+  uimm[31:2] = 0;
+  uimm[1]    = encoding[5];
+  uimm[0]    = 0;
+----
+
+描述：
+
+此指令从由 _rs1'_ 和零扩展的立即数 _uimm_ 形成的内存地址加载一个半字。结果半字被零扩展到 XLEN 位，并写入 _rd'_。
+
+[NOTE]
+====
+_rd'_ 和 _rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+无
+//32 位等效：
+//
+//<<insns-lhu>>
+
+操作：
+
+[source,sail]
+--
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+X(rdc) = EXTZ(load_mem[X(rs1c)+EXTZ(uimm)][15..0]);
+--
+
+<<<
+[#insns-c_lh,reftext="加载有符号半字，16 位编码"]
+==== c.lh
+
+概要：
+
+加载有符号半字，16 位编码
+
+助记符：
+
+c.lh _rd'_, _uimm_(_rs1'_)
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x0, attr: ['C0'] },
+    { bits:  3, name: 'rd\'' },
+    { bits:  1, name: 'uimm[1]' },
+    { bits:  1, name: 0x1 },
+    { bits:  3, name: 'rs1\'' },
+    { bits:  3, name: 0x1 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+立即数偏移如下形成：
+
+[source,sail]
+----
+  uimm[31:2] = 0;
+  uimm[1]    = encoding[5];
+  uimm[0]    = 0;
+----
+
+描述：
+
+此指令从由 _rs1'_ 和零扩展的立即数 _uimm_ 形成的内存地址加载一个半字。结果半字被符号扩展到 XLEN 位，并写入 _rd'_。
+
+[NOTE]
+====
+_rd'_ 和 _rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+无
+//32 位等效：
+//
+//<<insns-lh>>
+
+操作：
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+X(rdc) = EXTS(load_mem[X(rs1c)+EXTZ(uimm)][15..0]);
+----
+
+<<<
+[#insns-c_sb,reftext="存储字节，16 位编码"]
+==== c.sb
+
+概要：
+
+存储字节，16 位编码
+
+助记符：
+
+c.sb _rs2'_, _uimm_(_rs1'_)
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x0, attr: ['C0'] },
+    { bits:  3, name: 'rs2\'' },
+    { bits:  2, name: 'uimm[0|1]' },
+    { bits:  3, name: 'rs1\'' },
+    { bits:  3, name: 0x2 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+立即数偏移如下形成：
+
+[source,sail]
+----
+  uimm[31:2] = 0;
+  uimm[1]    = encoding[5];
+  uimm[0]    = encoding[6];
+----
+
+描述：
+
+此指令将 _rs2'_ 的最低有效字节存储到由 _rs1'_ 和零扩展的立即数 _uimm_ 形成的内存地址。
+
+[NOTE]
+====
+_rs1'_ 和 _rs2'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+无
+//
+//32 位等效：
+//
+//<<insns-sb>>
+
+操作：
+
+[source,sail]
+--
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+mem[X(rs1c)+EXTZ(uimm)][7..0] = X(rs2c)
+--
+
+<<<
+[#insns-c_sh,reftext="存储半字，16 位编码"]
+==== c.sh
+
+概要：
+
+存储半字，16 位编码
+
+助记符：
+
+c.sh _rs2'_, _uimm_(_rs1'_)
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x0, attr: ['C0'] },
+    { bits:  3, name: 'rs2\'' },
+    { bits:  1, name: 'uimm[1]' },
+    { bits:  1, name: '0' },
+    { bits:  3, name: 'rs1\'' },
+    { bits:  3, name: 0x3 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+立即数偏移如下形成：
+
+[source,sail]
+----
+  uimm[31:2] = 0;
+  uimm[1]    = encoding[5];
+  uimm[0]    = 0;
+----
+
+描述：
+
+此指令将 _rs2'_ 的最低有效半字存储到由 _rs1'_ 和零扩展的立即数 _uimm_ 形成的内存地址。
+
+[NOTE]
+====
+_rs1'_ 和 _rs2'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+无
+//
+//32 位等效：
+//
+//<<insns-sh>>
+
+操作：
+
+[source,sail]
+--
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+mem[X(rs1c)+EXTZ(uimm)][15..0] = X(rs2c)
+--
+
+<<<
+[#insns-c_zext_b,reftext="零扩展字节，16 位编码"]
+==== c.zext.b
+
+概要：
+
+零扩展字节，16 位编码
+
+助记符：
+
+c.zext.b _rd'/rs1'_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x1, attr: ['C1'] },
+    { bits:  3, name: 0x0, attr: ['C.ZEXT.B'] },
+    { bits:  2, name: 0x3, attr: ['FUNCT2'] },
+    { bits:  3, name: 'rd\'/rs1\'', attr: ['SRCDST'] },
+    { bits:  3, name: 0x7 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+描述：
+
+此指令采用单一源/目标操作数。
+它通过在比特 7 以上的所有位中插入零，将操作数的最低有效字节零扩展到 XLEN 位。
+
+[NOTE]
+====
+_rd'/rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+无
+
+32 位等效：
+
+[source,sail]
+----
+andi rd'/rs1', rd'/rs1', 0xff
+----
+
+[NOTE]
+====
+SAIL 模块变量 _rd'/rs1'_ 称为 _rsdc_。
+====
+
+操作：
+
+[source,sail]
+----
+X(rsdc) = EXTZ(X(rsdc)[7..0]);
+----
+
+<<<
+[#insns-c_sext_b,reftext="符号扩展字节，16 位编码"]
+==== c.sext.b
+
+概要：
+
+符号扩展字节，16 位编码
+
+助记符：
+
+c.sext.b _rd'/rs1'_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x1, attr: ['C1'] },
+    { bits:  3, name: 0x1, attr: ['C.SEXT.B'] },
+    { bits:  2, name: 0x3, attr: ['FUNCT2'] },
+    { bits:  3, name: 'rd\'/rs1\'', attr: ['SRCDST'] },
+    { bits:  3, name: 0x7 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+描述：
+
+此指令采用单一源/目标操作数。
+它通过将字节中最重要的位（即比特 7）复制到所有更重要的位，将操作数的最低有效字节符号扩展到 XLEN 位。
+
+[NOTE]
+====
+_rd'/rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+还需要 Zbb。
+//
+//32 位等效：
+//
+//<<insns-sext_b>> 来自 Zbb
+
+[NOTE]
+
+SAIL 模块变量 _rd'/rs1'_ 称为 _rsdc_。
+
+操作：
+
+[source,sail]
+----
+X(rsdc) = EXTS(X(rsdc)[7..0]);
+----
+
+<<<
+[#insns-c_zext_h,reftext="零扩展半字，16 位编码"]
+==== c.zext.h
+
+概要：
+
+零扩展半字，16 位编码
+
+助记符：
+
+c.zext.h _rd'/rs1'_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x1, attr: ['C1'] },
+    { bits:  3, name: 0x2, attr: ['C.ZEXT.H'] },
+    { bits:  2, name: 0x3, attr: ['FUNCT2'] },
+    { bits:  3, name: 'rd\'/rs1\'', attr: ['SRCDST'] },
+    { bits:  3, name: 0x7 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+描述：
+
+此指令采用单一源/目标操作数。
+它通过在比特 15 以上的所有位中插入零，将操作数的最低有效半字零扩展到 XLEN 位。
+
+[NOTE]
+====
+_rd'/rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+还需要 Zbb。
+//
+//32 位等效：
+//
+//<<insns-zext_h>> 来自 Zbb
+
+[NOTE]
+====
+SAIL 模块变量 _rd'/rs1'_ 称为 _rsdc_。
+====
+
+操作：
+
+[source,sail]
+----
+X(rsdc) = EXTZ(X(rsdc)[15..0]);
+----
+
+<<<
+[#insns-c_sext_h,reftext="符号扩展半字，16 位编码"]
+==== c.sext.h
+
+概要：
+
+符号扩展半字，16 位编码
+
+助记符：
+
+c.sext.h _rd'/rs1'_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x1, attr: ['C1'] },
+    { bits:  3, name: 0x3, attr: ['C.SEXT.H'] },
+    { bits:  2, name: 0x3, attr: ['FUNCT2'] },
+    { bits:  3, name: 'rd\'/rs1\'', attr: ['SRCDST'] },
+    { bits:  3, name: 0x7 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+描述：
+
+此指令采用单一源/目标操作数。
+它通过将半字中最重要的位（即比特 15）复制到所有更重要的位，将操作数的最低有效半字符号扩展到 XLEN 位。
+
+[NOTE]
+====
+_rd'/rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+还需要 Zbb。
+//
+//32 位等效：
+//
+//<<insns-sext_h>> 来自 Zbb
+
+[NOTE]
+====
+SAIL 模块变量 _rd'/rs1'_ 称为 _rsdc_。
+====
+
+操作：
+
+[source,sail]
+----
+X(rsdc) = EXTS(X(rsdc)[15..0]);
+----
+
+<<<
+[#insns-c_zext_w,reftext="零扩展字，16 位编码"]
+==== c.zext.w
+
+概要：
+
+零扩展字，16 位编码
+
+助记符：
+
+c.zext.w _rd'/rs1'_
+
+编码（RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x1, attr: ['C1'] },
+    { bits:  3, name: 0x4, attr: ['C.ZEXT.W'] },
+    { bits:  2, name: 0x3, attr: ['FUNCT2'] },
+    { bits:  3, name: 'rd\'/rs1\'', attr: ['SRCDST'] },
+    { bits:  3, name: 0x7 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+描述：
+
+此指令采用单一源/目标操作数。
+它通过在比特 31 以上的所有位中插入零，将操作数的最低有效字零扩展到 XLEN 位。
+
+[NOTE]
+====
+_rd'/rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+还需要 Zba。
+
+32 位等效：
+
+[source,sail]
+----
+add.uw rd'/rs1', rd'/rs1', zero
+----
+
+[NOTE]
+====
+SAIL 模块变量 _rd'/rs1'_ 称为 _rsdc_。
+====
+
+操作：
+
+[source,sail]
+----
+X(rsdc) = EXTZ(X(rsdc)[31..0]);
+----
+
+<<<
+[#insns-c_not,reftext="按位取反，16 位编码"]
+==== c.not
+
+概要：
+
+按位取反，16 位编码
+
+助记符：
+
+c.not _rd'/rs1'_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x1, attr: ['C1'] },
+    { bits:  3, name: 0x5, attr: ['C.NOT'] },
+    { bits:  2, name: 0x3, attr: ['FUNCT2'] },
+    { bits:  3, name: 'rd\'/rs1\'', attr: ['SRCDST'] },
+    { bits:  3, name: 0x7 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+描述：
+
+此指令对 _rd'/rs1'_ 进行按位取反，并将结果写入同一寄存器。
+
+[NOTE]
+====
+_rd'/rs1'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+无
+
+32 位等效：
+
+[source,sail]
+----
+xori rd'/rs1', rd'/rs1', -1
+----
+
+[NOTE]
+====
+SAIL 模块变量 _rd'/rs1'_ 称为 _rsdc_。
+====
+
+操作：
+
+[source,sail]
+----
+X(rsdc) = X(rsdc) XOR -1;
+----
+
+<<<
+[#insns-c_mul,reftext="乘法，16 位编码"]
+==== c.mul
+
+概要：
+
+乘法，16 位编码
+
+助记符：
+
+c.mul _rsd'_, _rs2'_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x1, attr: ['C1'] },
+    { bits:  3, name: 'rs2\'', attr: ['SRC2']  },
+    { bits:  2, name: 0x2, attr: ['FUNCT2'] },
+    { bits:  3, name: 'rd\'/rs1\'', attr: ['SRCDST'] },
+    { bits:  3, name: 0x7 },
+    { bits:  3, name: 0x4, attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+描述：
+
+此指令将 _rsd'_ 和 _rs2'_ 的源操作数的 XLEN 位相乘，并将结果的最低 XLEN 位写入 _rsd'_。
+
+[NOTE]
+====
+_rd'/rs1'_ 和 _rs2'_ 来自标准的 8 寄存器集 x8-x15。
+====
+
+先决条件：
+
+必须配置 M 或 Zmmul。
+//
+//32 位等效：
+//
+//<<insns-mul>>
+
+[NOTE]
+====
+SAIL 模块变量 _rd'/rs1'_ 称为 _rsdc_，_rs2'_ 称为 _rs2c_。
+====
+
+操作：
+
+[source,sail]
+----
+let result_wide = to_bits(2 * sizeof(xlen), signed(X(rsdc)) * signed(X(rs2c)));
+X(rsdc) = result_wide[(sizeof(xlen) - 1) .. 0];
+----
+
+<<<
+
+[#insns-pushpop,reftext="PUSH/POP 寄存器指令"]
+=== PUSH/POP 寄存器指令
+
+这些指令统称为 PUSH/POP：
+
+* <<#insns-cm_push>>
+* <<#insns-cm_pop>>
+* <<#insns-cm_popret>>
+* <<#insns-cm_popretz>>
+
+术语 PUSH 指的是 _cm.push_。
+
+术语 POP 指的是 _cm.pop_。
+
+术语 POPRET 指的是 _cm.popret 和 cm.popretz_。
+
+这些指令的共同细节在本节中。
+
+==== PUSH/POP 功能概述
+
+PUSH、POP、POPRET 用于减少函数序言和尾声的大小。
+
+. PUSH 指令
+** 调整堆栈指针以创建堆栈帧
+** 将寄存器列表中指定的寄存器推送（存储）到堆栈帧
+
+. POP 指令
+** 从堆栈帧中弹出（加载）寄存器列表中的寄存器
+** 调整堆栈指针以销毁堆栈帧
+
+. POPRET 指令
+** 从堆栈帧中弹出（加载）寄存器列表中的寄存器
+** _cm.popretz_ 还将零移动到 _a0_ 作为返回值
+** 调整堆栈指针以销毁堆栈帧
+** 执行 _ret_ 指令以从函数返回
+
+<<<
+==== 示例用法
+
+此示例说明了 PUSH 和 POPRET 的使用。
+
+EMBench 基准 picojpeg 中的函数 _processMarkers_ 在以下文件中：https://github.com/embench/embench-iot/blob/master/src/picojpeg/libpicojpeg.c[libpicojpeg.c]
+
+序言和尾声使用 GCC10 编译为：
+
+[source,SAIL]
+----
+
+   0001098a <processMarkers>:
+   1098a:       711d                    addi    sp,sp,-96 ;#cm.push(1)
+   1098c:       c8ca                    sw      s2,80(sp) ;#cm.push(2)
+   1098e:       c6ce                    sw      s3,76(sp) ;#cm.push(3)
+   10990:       c4d2                    sw      s4,72(sp) ;#cm.push(4)
+   10992:       ce86                    sw      ra,92(sp) ;#cm.push(5)
+   10994:       cca2                    sw      s0,88(sp) ;#cm.push(6)
+   10996:       caa6                    sw      s1,84(sp) ;#cm.push(7)
+   10998:       c2d6                    sw      s5,68(sp) ;#cm.push(8)
+   1099a:       c0da                    sw      s6,64(sp) ;#cm.push(9)
+   1099c:       de5e                    sw      s7,60(sp) ;#cm.push(10)
+   1099e:       dc62                    sw      s8,56(sp) ;#cm.push(11)
+   109a0:       da66                    sw      s9,52(sp) ;#cm.push(12)
+   109a2:       d86a                    sw      s10,48(sp);#cm.push(13)
+   109a4:       d66e                    sw      s11,44(sp);#cm.push(14)
+...
+   109f4:       4501                    li      a0,0      ;#cm.popretz(1)
+   109f6:       40f6                    lw      ra,92(sp) ;#cm.popretz(2)
+   109f8:       4466                    lw      s0,88(sp) ;#cm.popretz(3)
+   109fa:       44d6                    lw      s1,84(sp) ;#cm.popretz(4)
+   109fc:       4946                    lw      s2,80(sp) ;#cm.popretz(5)
+   109fe:       49b6                    lw      s3,76(sp) ;#cm.popretz(6)
+   10a00:       4a26                    lw      s4,72(sp) ;#cm.popretz(7)
+   10a02:       4a96                    lw      s5,68(sp) ;#cm.popretz(8)
+   10a04:       4b06                    lw      s6,64(sp) ;#cm.popretz(9)
+   10a06:       5bf2                    lw      s7,60(sp) ;#cm.popretz(10)
+   10a08:       5c62                    lw      s8,56(sp) ;#cm.popretz(11)
+   10a0a:       5cd2                    lw      s9,52(sp) ;#cm.popretz(12)
+   10a0c:       5d42                    lw      s10,48(sp);#cm.popretz(13)
+   10a0e:       5db2                    lw      s11,44(sp);#cm.popretz(14)
+   10a10:       6125                    addi    sp,sp,96  ;#cm.popretz(15)
+   10a12:       8082                    ret               ;#cm.popretz(16)
+----
+
+<<<
+
+使用 GCC 选项 _-msave-restore_ 的输出如下：
+
+[source,SAIL]
+----
+0001080e <processMarkers>:
+   1080e:       73a012ef                jal     t0,11f48 <__riscv_save_12>
+   10812:       1101                    addi    sp,sp,-32
+...
+   10862:       4501                    li      a0,0
+   10864:       6105                    addi    sp,sp,32
+   10866:       71e0106f                j       11f84 <__riscv_restore_12>
+----
+
+使用 PUSH/POPRET 这减少为
+
+[source,SAIL]
+----
+0001080e <processMarkers>:
+   1080e:       b8fa                    cm.push    {ra,s0-s11},-96
+...
+   10866:       bcfa                    cm.popretz {ra,s0-s11}, 96
+----
+
+序言/尾声从原始代码中的 60 字节减少到 14 字节，使用 _-msave-restore_，
+并使用 PUSH 和 POPRET 减少到 4 字节。
+除了减少代码大小外，PUSH 和 POPRET 还消除了调用 millicode _save/restore_ 例程的分支，因此可能表现更好。
+
+[NOTE]
+====
+当目标函数超出 ±1MB 范围时，对 _<riscv_save_0>/<riscv_restore_0>_ 的调用变为 64 位，增加了序言/尾声的大小到 22 字节。
+====
+
+[NOTE]
+====
+POP 通常用于尾调用序列，其中 _ret_ 不用于在销毁堆栈帧后返回到 _ra_。
+====
+
+[#pushpop-areg-list]
+
+===== 堆栈指针调整处理
+
+这些指令会自动调整堆栈指针，以覆盖保存或恢复寄存器所需的内存。
+此外，编码中的 _spimm_ 字段允许堆栈指针以 16 字节的增量进行额外调整。编码中只有一个小的受限范围；如果范围不足，可以使用单独的 _c.addi16sp_ 来增加范围。
+
+===== 寄存器列表处理
+
+不支持 _{ra, s0-s10}_ 寄存器列表而不添加 _s11_。因此，在这种情况下必须使用 _{ra, s0-s11}_ 寄存器列表。
+
+[#pushpop-idempotent-memory]
+==== PUSH/POP 故障处理
+
+正确执行要求 _sp_ 引用幂等内存（另见 <<pushpop_non-idem-mem>>），因为核心必须能够处理在序列期间检测到的陷阱。
+从陷阱处理程序返回后，整个 PUSH/POP 序列将重新执行，并且在序列期间可能会发生多次陷阱。
+
+如果在序列期间发生陷阱，则 _xEPC_ 将更新为指令的 PC，_xTVAL_（如果不是只读零）将更新为错误地址（如果是访问错误），_xCAUSE_ 将更新为陷阱类型。
+
+注意：是否可以在序列执行期间也接受中断是实现定义的。
+
+[#pushpop-software-view]
+==== 执行的软件视图
+
+===== PUSH 序列的软件视图
+
+从软件的角度来看，PUSH 序列如下：
+
+* 一系列存储写入伪代码所需的字节
+** 字节可以以任何顺序写入。
+** 字节可以分组为更大的访问。
+** 任何字节都可以多次写入。
+* 堆栈指针调整
+
+[NOTE]
+====
+如果实现允许在序列期间中断，并且中断处理程序使用 _sp_ 分配堆栈内存，则在中断之前执行的任何存储可能会被处理程序覆盖。这是安全的，因为内存是幂等的，并且在恢复执行时将重新执行存储。
+====
+
+堆栈指针调整必须仅在确定整个 PUSH 指令将提交时才提交。
+
+存储还可能从总线返回不精确的错误。
+平台定义核心实现是否在继续到序列的最后阶段之前等待总线响应，
+或在完成 PUSH 指令后处理错误响应。
+
+<<<
+
+例如：
+
+[source,sail]
+----
+cm.push  {ra, s0-s5}, -64
+----
+
+在软件中显示为：
+
+[source,sail]
+----
+# 在指令完成之前，sp-1 到 sp-28 之间的任何字节都可能被多次写入，因此这些更新可能在堆栈指针下的中断/异常处理程序中可见
+sw  s5, -4(sp)
+sw  s4, -8(sp)
+sw  s3,-12(sp)
+sw  s2,-16(sp)
+sw  s1,-20(sp)
+sw  s0,-24(sp)
+sw  ra,-28(sp)
+
+# 这必须只执行一次，并且只有在所有存储完成且没有任何精确错误后才会执行，因此此更新仅在 cm.push 完成时在中断/异常处理程序中可见
+addi sp, sp, -64
+----
+
+===== POP/POPRET 序列的软件视图
+
+从软件的角度来看，POP/POPRET 序列如下：
+
+* 一系列加载读取伪代码所需的字节。
+** 字节可以以任何顺序加载。
+** 字节可以分组为更大的访问。
+** 任何字节都可以多次加载。
+* 堆栈指针调整
+* 可选的 `li a0, 0`
+* 可选的 `ret`
+
+如果在序列期间发生陷阱，则在陷阱之前执行的任何加载可能会更新架构状态。
+一旦陷阱处理程序完成，加载将重新执行，因此值将被覆盖。
+因此，允许实现更新一些目标寄存器，然后再发生错误。
+
+可选的 `li a0, 0`、堆栈指针调整和可选的 `ret` 必须仅在确定整个 POP/POPRET 指令将提交时才提交。
+
+对于 POPRET，一旦堆栈指针调整提交，`ret` 必须执行。
+
+<<<
+例如：
+
+[source,sail]
+----
+cm.popretz {ra, s0-s3}, 32;
+----
+
+在软件中显示为：
+
+[source,sail]
+----
+# 这些加载指令中的任何或全部可能会多次执行，因此这些更新可能在中断/异常处理程序中可见
+lw   s3, 28(sp)
+lw   s2, 24(sp)
+lw   s1, 20(sp)
+lw   s0, 16(sp)
+lw   ra, 12(sp)
+
+# 这些必须只执行一次，并且只有在所有加载成功完成后才会执行，所有指令必须原子执行，因此这些更新在中断/异常处理程序中不可见
+li a0, 0
+addi sp, sp, 32
+ret
+----
+
+[[pushpop_non-idem-mem,非幂等内存处理]]
+==== 非幂等内存处理
+
+实现可能需要对非幂等内存发出 PUSH/POP 指令。
+
+如果核心实现不支持对非幂等内存的 PUSH/POP，核心可以使用幂等 PMA 来检测并采取
+加载（POP/POPRET）或存储（PUSH）访问错误异常，以避免不可预测的结果。
+
+软件应仅在软件可以容忍所需的内存访问时使用这些指令
+在它们引起异常的情况下被重复发出。
+
+<<<
+
+==== 示例 RV32I PUSH/POP 序列
+
+这些示例包括加载/存储系列扩展和堆栈调整。
+不包括 _cm.popret_ 和 _cm.popretz_ 的示例，因为在所有情况下，扩展序列与 _cm.pop_ 的区别是微不足道的。
+
+===== cm.push  {ra, s0-s2}, -64
+
+编码：_rlist_=7，_spimm_=3
+
+扩展为：
+
+[source,sail]
+----
+sw  s2,  -4(sp);
+sw  s1,  -8(sp);
+sw  s0, -12(sp);
+sw  ra, -16(sp);
+addi sp, sp, -64;
+----
+
+===== cm.push {ra, s0-s11}, -112
+
+编码：_rlist_=15，_spimm_=3
+
+扩展为：
+
+[source,sail]
+----
+sw  s11,  -4(sp);
+sw  s10,  -8(sp);
+sw  s9,  -12(sp);
+sw  s8,  -16(sp);
+sw  s7,  -20(sp);
+sw  s6,  -24(sp);
+sw  s5,  -28(sp);
+sw  s4,  -32(sp);
+sw  s3,  -36(sp);
+sw  s2,  -40(sp);
+sw  s1,  -44(sp);
+sw  s0,  -48(sp);
+sw  ra,  -52(sp);
+addi sp, sp, -112;
+----
+
+<<<
+
+===== cm.pop   {ra}, 16
+
+编码：_rlist_=4，_spimm_=0
+
+扩展为：
+
+[source,sail]
+----
+lw   ra, 12(sp);
+addi sp, sp, 16;
+----
+
+===== cm.pop {ra, s0-s3}, 48
+
+编码：_rlist_=8，_spimm_=1
+
+扩展为：
+
+[source,sail]
+----
+lw   s3, 44(sp);
+lw   s2, 40(sp);
+lw   s1, 36(sp);
+lw   s0, 32(sp);
+lw   ra, 28(sp);
+addi sp, sp, 48;
+----
+
+===== cm.pop {ra, s0-s4}, 64
+
+编码：_rlist_=9，_spimm_=2
+
+扩展为：
+
+[source,sail]
+----
+lw   s4, 60(sp);
+lw   s3, 56(sp);
+lw   s2, 52(sp);
+lw   s1, 48(sp);
+lw   s0, 44(sp);
+lw   ra, 40(sp);
+addi sp, sp, 64;
+----
+
+<<<
+[#insns-cm_push,reftext="cm.push"]
+==== cm.push
+
+概要：
+
+创建堆栈帧：将 ra 和 0 到 12 个保存的寄存器存储到堆栈帧中，可选地分配额外的堆栈空间。
+
+助记符：
+
+cm.push _{reg_list}, -stack_adj_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x2,             attr: ['C2'] },
+    { bits:  2, name: 'spimm\[5:4\]',  attr: [] },
+    { bits:  4, name: 'rlist',         attr: [] },
+    { bits:  5, name: 0x18,            attr: [] },
+    { bits:  3, name: 0x5,             attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+[NOTE]
+====
+_rlist_ 值 0 到 3 保留给未来的 EABI 变体，称为 _cm.push.e_
+====
+
+汇编语法：
+
+[source,sail]
+--
+cm.push {reg_list},  -stack_adj
+cm.push {xreg_list}, -stack_adj
+--
+
+汇编语法中使用的变量定义如下。
+
+[source,sail]
+----
+RV32E:
+
+switch (rlist){
+  case  4: {reg_list="ra";         xreg_list="x1";}
+  case  5: {reg_list="ra, s0";     xreg_list="x1, x8";}
+  case  6: {reg_list="ra, s0-s1";  xreg_list="x1, x8-x9";}
+  default: reserved();
+}
+stack_adj      = stack_adj_base + spimm[5:4] * 16;
+----
+
+[source,sail]
+----
+RV32I, RV64:
+
+switch (rlist){
+  case  4: {reg_list="ra";         xreg_list="x1";}
+  case  5: {reg_list="ra, s0";     xreg_list="x1, x8";}
+  case  6: {reg_list="ra, s0-s1";  xreg_list="x1, x8-x9";}
+  case  7: {reg_list="ra, s0-s2";  xreg_list="x1, x8-x9, x18";}
+  case  8: {reg_list="ra, s0-s3";  xreg_list="x1, x8-x9, x18-x19";}
+  case  9: {reg_list="ra, s0-s4";  xreg_list="x1, x8-x9, x18-x20";}
+  case 10: {reg_list="ra, s0-s5";  xreg_list="x1, x8-x9, x18-x21";}
+  case 11: {reg_list="ra, s0-s6";  xreg_list="x1, x8-x9, x18-x22";}
+  case 12: {reg_list="ra, s0-s7";  xreg_list="x1, x8-x9, x18-x23";}
+  case 13: {reg_list="ra, s0-s8";  xreg_list="x1, x8-x9, x18-x24";}
+  case 14: {reg_list="ra, s0-s9";  xreg_list="x1, x8-x9, x18-x25";}
+  //note - to include s10, s11 must also be included
+  case 15: {reg_list="ra, s0-s11"; xreg_list="x1, x8-x9, x18-x27";}
+  default: reserved();
+}
+stack_adj      = stack_adj_base + spimm[5:4] * 16;
+----
+
+[source,sail]
+----
+RV32E:
+
+stack_adj_base = 16;
+有效值:
+stack_adj      = [16|32|48|64];
+----
+
+[source,sail]
+----
+RV32I:
+
+switch (rlist) {
+  case  4.. 7: stack_adj_base = 16;
+  case  8..11: stack_adj_base = 32;
+  case 12..14: stack_adj_base = 48;
+  case     15: stack_adj_base = 64;
+}
+
+有效值:
+switch (rlist) {
+  case  4.. 7: stack_adj = [16|32|48| 64];
+  case  8..11: stack_adj = [32|48|64| 80];
+  case 12..14: stack_adj = [48|64|80| 96];
+  case     15: stack_adj = [64|80|96|112];
+}
+----
+
+// ...existing code...
+
+[source,sail]
+----
+RV64:
+
+switch (rlist) {
+  case  4.. 5: stack_adj_base =  16;
+  case  6.. 7: stack_adj_base =  32;
+  case  8.. 9: stack_adj_base =  48;
+  case 10..11: stack_adj_base =  64;
+  case 12..13: stack_adj_base =  80;
+  case     14: stack_adj_base =  96;
+  case     15: stack_adj_base = 112;
+}
+
+有效值:
+switch (rlist) {
+  case  4.. 5: stack_adj = [ 16| 32| 48| 64];
+  case  6.. 7: stack_adj = [ 32| 48| 64| 80];
+  case  8.. 9: stack_adj = [ 48| 64| 80| 96];
+  case 10..11: stack_adj = [ 64| 80| 96|112];
+  case 12..13: stack_adj = [ 80| 96|112|128];
+  case     14: stack_adj = [ 96|112|128|144];
+  case     15: stack_adj = [112|128|144|160];
+}
+----
+
+<<<
+描述：
+
+此指令将 _reg_list_ 中的寄存器推送（存储）到堆栈指针下方的内存中，
+然后通过减少堆栈指针 _stack_adj_ 来创建堆栈帧，
+包括 _spimm_ 值请求的任何额外堆栈空间。
+
+[NOTE]
+====
+所有 ABI 寄存器映射均为 UABI。计划在 EABI 冻结后推出 EABI 版本。
+====
+
+有关更多信息，请参见 <<insns-pushpop>>。
+
+堆栈调整计算：
+
+_stack_adj_base_ 是覆盖列表中寄存器所需的最小字节数，以 16 字节地址增量的倍数表示。
+
+_spimm_ 是为堆栈帧分配的额外 16 字节地址增量的数量。
+
+总堆栈调整表示堆栈帧的总大小，即 _stack_adj_base_ 加上 _spimm_ 按 16 缩放，如上所定义。
+
+先决条件：
+
+无
+
+32 位等效：
+
+不存在直接等效编码
+
+操作：
+
+伪代码的第一部分可能会在指令成功完成之前多次执行。
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+if (XLEN==32) bytes=4; else bytes=8;
+
+addr=sp-bytes;
+for(i in 27,26,25,24,23,22,21,20,19,18,9,8,1)  {
+  //如果寄存器 i 在 xreg_list 中
+  if (xreg_list[i]) {
+    switch(bytes) {
+      4:  asm("sw x[i], 0(addr)");
+      8:  asm("sd x[i], 0(addr)");
+    }
+    addr-=bytes;
+  }
+}
+----
+
+伪代码的最后一部分是原子执行的，并且仅在上述部分完成且没有任何异常或中断时执行。
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+sp-=stack_adj;
+----
+
+<<<
+[#insns-cm_pop,reftext="cm.pop"]
+==== cm.pop
+
+概要：
+
+销毁堆栈帧：从堆栈帧加载 ra 和 0 到 12 个保存的寄存器，释放堆栈帧。
+
+助记符：
+
+cm.pop  _{reg_list}, stack_adj_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x2,             attr: ['C2'] },
+    { bits:  2, name: 'spimm\[5:4\]',  attr: [] },
+    { bits:  4, name: 'rlist',         attr: [] },
+    { bits:  5, name: 0x1a,            attr: [] },
+    { bits:  3, name: 0x5,             attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+[NOTE]
+====
+_rlist_ 值 0 到 3 保留给未来的 EABI 变体，称为 _cm.pop.e_
+====
+
+汇编语法：
+
+[source,sail]
+----
+cm.pop {reg_list},  stack_adj
+cm.pop {xreg_list}, stack_adj
+----
+
+汇编语法中使用的变量定义如下。
+
+[source,sail]
+----
+RV32E:
+
+switch (rlist){
+  case  4: {reg_list="ra";         xreg_list="x1";}
+  case  5: {reg_list="ra, s0";     xreg_list="x1, x8";}
+  case  6: {reg_list="ra, s0-s1";  xreg_list="x1, x8-x9";}
+  default: reserved();
+}
+stack_adj      = stack_adj_base + spimm[5:4] * 16;
+----
+
+[source,sail]
+----
+RV32I, RV64:
+
+switch (rlist){
+  case  4: {reg_list="ra";         xreg_list="x1";}
+  case  5: {reg_list="ra, s0";     xreg_list="x1, x8";}
+  case  6: {reg_list="ra, s0-s1";  xreg_list="x1, x8-x9";}
+  case  7: {reg_list="ra, s0-s2";  xreg_list="x1, x8-x9, x18";}
+  case  8: {reg_list="ra, s0-s3";  xreg_list="x1, x8-x9, x18-x19";}
+  case  9: {reg_list="ra, s0-s4";  xreg_list="x1, x8-x9, x18-x20";}
+  case 10: {reg_list="ra, s0-s5";  xreg_list="x1, x8-x9, x18-x21";}
+  case 11: {reg_list="ra, s0-s6";  xreg_list="x1, x8-x9, x18-x22";}
+  case 12: {reg_list="ra, s0-s7";  xreg_list="x1, x8-x9, x18-x23";}
+  case 13: {reg_list="ra, s0-s8";  xreg_list="x1, x8-x9, x18-x24";}
+  case 14: {reg_list="ra, s0-s9";  xreg_list="x1, x8-x9, x18-x25";}
+  //note - to include s10, s11 must also be included
+  case 15: {reg_list="ra, s0-s11"; xreg_list="x1, x8-x9, x18-x27";}
+  default: reserved();
+}
+stack_adj      = stack_adj_base + spimm[5:4] * 16;
+----
+
+[source,sail]
+----
+RV32E:
+
+stack_adj_base = 16;
+有效值:
+stack_adj      = [16|32|48|64];
+----
+
+[source,sail]
+----
+RV32I:
+
+switch (rlist) {
+  case  4.. 7: stack_adj_base = 16;
+  case  8..11: stack_adj_base = 32;
+  case 12..14: stack_adj_base = 48;
+  case     15: stack_adj_base = 64;
+}
+
+有效值:
+switch (rlist) {
+  case  4.. 7: stack_adj = [16|32|48| 64];
+  case  8..11: stack_adj = [32|48|64| 80];
+  case 12..14: stack_adj = [48|64|80| 96];
+  case     15: stack_adj = [64|80|96|112];
+}
+----
+
+[source,sail]
+----
+RV64:
+
+switch (rlist) {
+  case  4.. 5: stack_adj_base =  16;
+  case  6.. 7: stack_adj_base =  32;
+  case  8.. 9: stack_adj_base =  48;
+  case 10..11: stack_adj_base =  64;
+  case 12..13: stack_adj_base =  80;
+  case     14: stack_adj_base =  96;
+  case     15: stack_adj_base = 112;
+}
+
+有效值:
+switch (rlist) {
+  case  4.. 5: stack_adj = [ 16| 32| 48| 64];
+  case  6.. 7: stack_adj = [ 32| 48| 64| 80];
+  case  8.. 9: stack_adj = [ 48| 64| 80| 96];
+  case 10..11: stack_adj = [ 64| 80| 96|112];
+  case 12..13: stack_adj = [ 80| 96|112|128];
+  case     14: stack_adj = [ 96|112|128|144];
+  case     15: stack_adj = [112|128|144|160];
+}
+----
+
+<<<
+
+描述：
+
+此指令从堆栈内存中弹出（加载）_reg_list_ 中的寄存器，
+然后通过 _stack_adj_ 调整堆栈指针。
+
+[NOTE]
+====
+所有 ABI 寄存器映射均为 UABI。计划在 EABI 冻结后推出 EABI 版本。
+====
+
+有关更多信息，请参见 <<insns-pushpop>>。
+
+堆栈调整计算：
+
+_stack_adj_base_ 是覆盖列表中寄存器所需的最小字节数，以 16 字节地址增量的倍数表示。
+
+_spimm_ 是为堆栈帧分配的额外 16 字节地址增量的数量。
+
+总堆栈调整表示堆栈帧的总大小，即 _stack_adj_base_ 加上 _spimm_ 按 16 缩放，如上所定义。
+
+先决条件：
+
+无
+
+32 位等效：
+
+不存在直接等效编码
+
+操作：
+
+伪代码的第一部分可能会在指令成功完成之前多次执行。
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+if (XLEN==32) bytes=4; else bytes=8;
+
+addr=sp+stack_adj-bytes;
+for(i in 27,26,25,24,23,22,21,20,19,18,9,8,1)  {
+  //如果寄存器 i 在 xreg_list 中
+  if (xreg_list[i]) {
+    switch(bytes) {
+      4:  asm("lw x[i], 0(addr)");
+      8:  asm("ld x[i], 0(addr)");
+    }
+    addr-=bytes;
+  }
+}
+----
+
+伪代码的最后一部分是原子执行的，并且仅在上述部分完成且没有任何异常或中断时执行。
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+sp+=stack_adj;
+----
+
+<<<
+[#insns-cm_popretz,reftext="cm.popretz"]
+==== cm.popretz
+
+概要：
+
+销毁堆栈帧：从堆栈帧加载 ra 和 0 到 12 个保存的寄存器，释放堆栈帧，将零移动到 a0，返回到 ra。
+
+助记符：
+
+cm.popretz _{reg_list}, stack_adj_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x2,             attr: ['C2'] },
+    { bits:  2, name: 'spimm\[5:4\]',  attr: [] },
+    { bits:  4, name: 'rlist',         attr: [] },
+    { bits:  5, name: 0x1c,            attr: [] },
+    { bits:  3, name: 0x5,             attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+[NOTE]
+====
+_rlist_ 值 0 到 3 保留给未来的 EABI 变体，称为 _cm.popretz.e_
+====
+
+汇编语法：
+
+[source,sail]
+----
+cm.popretz {reg_list},  stack_adj
+cm.popretz {xreg_list}, stack_adj
+----
+
+[source,sail]
+----
+RV32E:
+
+switch (rlist){
+  case  4: {reg_list="ra";         xreg_list="x1";}
+  case  5: {reg_list="ra, s0";     xreg_list="x1, x8";}
+  case  6: {reg_list="ra, s0-s1";  xreg_list="x1, x8-x9";}
+  default: reserved();
+}
+stack_adj      = stack_adj_base + spimm[5:4] * 16;
+----
+
+// ...existing code...
+
+[source,sail]
+----
+RV32I, RV64:
+
+switch (rlist){
+  case  4: {reg_list="ra";         xreg_list="x1";}
+  case  5: {reg_list="ra, s0";     xreg_list="x1, x8";}
+  case  6: {reg_list="ra, s0-s1";  xreg_list="x1, x8-x9";}
+  case  7: {reg_list="ra, s0-s2";  xreg_list="x1, x8-x9, x18";}
+  case  8: {reg_list="ra, s0-s3";  xreg_list="x1, x8-x9, x18-x19";}
+  case  9: {reg_list="ra, s0-s4";  xreg_list="x1, x8-x9, x18-x20";}
+  case 10: {reg_list="ra, s0-s5";  xreg_list="x1, x8-x9, x18-x21";}
+  case 11: {reg_list="ra, s0-s6";  xreg_list="x1, x8-x9, x18-x22";}
+  case 12: {reg_list="ra, s0-s7";  xreg_list="x1, x8-x9, x18-x23";}
+  case 13: {reg_list="ra, s0-s8";  xreg_list="x1, x8-x9, x18-x24";}
+  case 14: {reg_list="ra, s0-s9";  xreg_list="x1, x8-x9, x18-x25";}
+  // 注意 - 包含 s10 时必须也包含 s11
+  case 15: {reg_list="ra, s0-s11"; xreg_list="x1, x8-x9, x18-x27";}
+  default: reserved();
+}
+stack_adj      = stack_adj_base + spimm[5:4] * 16;
+----
+
+[source,sail]
+----
+RV32E:
+
+stack_adj_base = 16;
+有效值:
+stack_adj      = [16|32|48|64];
+----
+
+[source,sail]
+----
+RV32I:
+
+switch (rlist) {
+  case  4.. 7: stack_adj_base = 16;
+  case  8..11: stack_adj_base = 32;
+  case 12..14: stack_adj_base = 48;
+  case     15: stack_adj_base = 64;
+}
+
+有效值:
+switch (rlist) {
+  case  4.. 7: stack_adj = [16|32|48| 64];
+  case  8..11: stack_adj = [32|48|64| 80];
+  case 12..14: stack_adj = [48|64|80| 96];
+  case     15: stack_adj = [64|80|96|112];
+}
+----
+
+[source,sail]
+----
+RV64:
+
+switch (rlist) {
+  case  4.. 5: stack_adj_base =  16;
+  case  6.. 7: stack_adj_base =  32;
+  case  8.. 9: stack_adj_base =  48;
+  case 10..11: stack_adj_base =  64;
+  case 12..13: stack_adj_base =  80;
+  case     14: stack_adj_base =  96;
+  case     15: stack_adj_base = 112;
+}
+
+有效值:
+switch (rlist) {
+  case  4.. 5: stack_adj = [ 16| 32| 48| 64];
+  case  6.. 7: stack_adj = [ 32| 48| 64| 80];
+  case  8.. 9: stack_adj = [ 48| 64| 80| 96];
+  case 10..11: stack_adj = [ 64| 80| 96|112];
+  case 12..13: stack_adj = [ 80| 96|112|128];
+  case     14: stack_adj = [ 96|112|128|144];
+  case     15: stack_adj = [112|128|144|160];
+}
+----
+
+<<<
+
+描述：
+
+此指令从堆栈内存中弹出（加载）_reg_list_ 中的寄存器，调整堆栈指针 _stack_adj_，将零移动到 a0，然后返回到 _ra_。
+
+[NOTE]
+====
+所有 ABI 寄存器映射均为 UABI。计划在 EABI 冻结后推出 EABI 版本。
+====
+
+有关更多信息，请参见 <<insns-pushpop>>。
+
+堆栈调整计算：
+
+_stack_adj_base_ 是覆盖列表中寄存器所需的最小字节数，以 16 字节地址增量的倍数表示。
+
+_spimm_ 是为堆栈帧分配的额外 16 字节地址增量的数量。
+
+总堆栈调整表示堆栈帧的总大小，即 _stack_adj_base_ 加上 _spimm_ 按 16 缩放，如上所定义。
+
+先决条件：
+
+无
+
+32 位等效：
+
+不存在直接等效编码
+
+操作：
+
+伪代码的第一部分可能会在指令成功完成之前多次执行。
+
+[source,sail]
+----
+// 这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+if (XLEN==32) bytes=4; else bytes=8;
+
+addr=sp+stack_adj-bytes;
+for(i in 27,26,25,24,23,22,21,20,19,18,9,8,1)  {
+  // 如果寄存器 i 在 xreg_list 中
+  if (xreg_list[i]) {
+    switch(bytes) {
+      4:  asm("lw x[i], 0(addr)");
+      8:  asm("ld x[i], 0(addr)");
+    }
+    addr-=bytes;
+  }
+}
+----
+
+伪代码的最后一部分是原子执行的，并且仅在上述部分完成且没有任何异常或中断时执行。
+
+[NOTE]
+====
+_li a0, 0_ *可能* 会多次执行，但为了方便起见包含在原子部分中。
+====
+
+[source,sail]
+----
+// 这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+asm("li a0, 0");
+sp+=stack_adj;
+asm("ret");
+----
+
+<<<
+[#insns-cm_popret,reftext="cm.popret"]
+==== cm.popret
+
+概要：
+
+销毁堆栈帧：从堆栈帧加载 ra 和 0 到 12 个保存的寄存器，释放堆栈帧，返回到 ra。
+
+助记符：
+
+cm.popret _{reg_list}, stack_adj_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x2,             attr: ['C2'] },
+    { bits:  2, name: 'spimm\[5:4\]',  attr: [] },
+    { bits:  4, name: 'rlist',         attr: [] },
+    { bits:  5, name: 0x1e,            attr: [] },
+    { bits:  3, name: 0x5,             attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+[NOTE]
+====
+_rlist_ 值 0 到 3 保留给未来的 EABI 变体，称为 _cm.popret.e_
+====
+
+汇编语法：
+
+[source,sail]
+----
+cm.popret {reg_list},  stack_adj
+cm.popret {xreg_list}, stack_adj
+----
+
+汇编语法中使用的变量定义如下。
+
+[source,sail]
+----
+RV32E:
+
+switch (rlist){
+  case  4: {reg_list="ra";         xreg_list="x1";}
+  case  5: {reg_list="ra, s0";     xreg_list="x1, x8";}
+  case  6: {reg_list="ra, s0-s1";  xreg_list="x1, x8-x9";}
+  default: reserved();
+}
+stack_adj      = stack_adj_base + spimm[5:4] * 16;
+----
+
+[source,sail]
+----
+RV32I, RV64:
+
+switch (rlist){
+  case  4: {reg_list="ra";         xreg_list="x1";}
+  case  5: {reg_list="ra, s0";     xreg_list="x1, x8";}
+  case  6: {reg_list="ra, s0-s1";  xreg_list="x1, x8-x9";}
+  case  7: {reg_list="ra, s0-s2";  xreg_list="x1, x8-x9, x18";}
+  case  8: {reg_list="ra, s0-s3";  xreg_list="x1, x8-x9, x18-x19";}
+  case  9: {reg_list="ra, s0-s4";  xreg_list="x1, x8-x9, x18-x20";}
+  case 10: {reg_list="ra, s0-s5";  xreg_list="x1, x8-x9, x18-x21";}
+  case 11: {reg_list="ra, s0-s6";  xreg_list="x1, x8-x9, x18-x22";}
+  case 12: {reg_list="ra, s0-s7";  xreg_list="x1, x8-x9, x18-x23";}
+  case 13: {reg_list="ra, s0-s8";  xreg_list="x1, x8-x9, x18-x24";}
+  case 14: {reg_list="ra, s0-s9";  xreg_list="x1, x8-x9, x18-x25";}
+  // 注意 - 包含 s10 时必须也包含 s11
+  case 15: {reg_list="ra, s0-s11"; xreg_list="x1, x8-x9, x18-x27";}
+  default: reserved();
+}
+stack_adj      = stack_adj_base + spimm[5:4] * 16;
+----
+
+[source,sail]
+----
+RV32E:
+
+stack_adj_base = 16;
+有效值:
+stack_adj      = [16|32|48|64];
+----
+
+[source,sail]
+----
+RV32I:
+
+switch (rlist) {
+  case  4.. 7: stack_adj_base = 16;
+  case  8..11: stack_adj_base = 32;
+  case 12..14: stack_adj_base = 48;
+  case     15: stack_adj_base = 64;
+}
+
+有效值:
+switch (rlist) {
+  case  4.. 7: stack_adj = [16|32|48| 64];
+  case  8..11: stack_adj = [32|48|64| 80];
+  case 12..14: stack_adj = [48|64|80| 96];
+  case     15: stack_adj = [64|80|96|112];
+}
+----
+
+[source,sail]
+----
+RV64:
+
+switch (rlist) {
+  case  4.. 5: stack_adj_base =  16;
+  case  6.. 7: stack_adj_base =  32;
+  case  8.. 9: stack_adj_base =  48;
+  case 10..11: stack_adj_base =  64;
+  case 12..13: stack_adj_base =  80;
+  case     14: stack_adj_base =  96;
+  case     15: stack_adj_base = 112;
+}
+
+有效值:
+switch (rlist) {
+  case  4.. 5: stack_adj = [ 16| 32| 48| 64];
+  case  6.. 7: stack_adj = [ 32| 48| 64| 80];
+  case  8.. 9: stack_adj = [ 48| 64| 80| 96];
+  case 10..11: stack_adj = [ 64| 80| 96|112];
+  case 12..13: stack_adj = [ 80| 96|112|128];
+  case     14: stack_adj = [ 96|112|128|144];
+  case     15: stack_adj = [112|128|144|160];
+}
+----
+
+<<<
+
+描述：
+
+此指令从堆栈内存中弹出（加载）_reg_list_ 中的寄存器，调整堆栈指针 _stack_adj_，然后返回到 _ra_。
+
+[NOTE]
+====
+所有 ABI 寄存器映射均为 UABI。计划在 EABI 冻结后推出 EABI 版本。
+====
+
+有关更多信息，请参见 <<insns-pushpop>>。
+
+堆栈调整计算：
+
+_stack_adj_base_ 是覆盖列表中寄存器所需的最小字节数，以 16 字节地址增量的倍数表示。
+
+_spimm_ 是为堆栈帧分配的额外 16 字节地址增量的数量。
+
+总堆栈调整表示堆栈帧的总大小，即 _stack_adj_base_ 加上 _spimm_ 按 16 缩放，如上所定义。
+
+先决条件：
+
+无
+
+32 位等效：
+
+不存在直接等效编码
+
+操作：
+
+伪代码的第一部分可能会在指令成功完成之前多次执行。
+
+[source,sail]
+----
+// 这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+if (XLEN==32) bytes=4; else bytes=8;
+
+addr=sp+stack_adj-bytes;
+for(i in 27,26,25,24,23,22,21,20,19,18,9,8,1)  {
+  // 如果寄存器 i 在 xreg_list 中
+  if (xreg_list[i]) {
+    switch(bytes) {
+      4:  asm("lw x[i], 0(addr)");
+      8:  asm("ld x[i], 0(addr)");
+    }
+    addr-=bytes;
+  }
+}
+----
+
+伪代码的最后一部分是原子执行的，并且仅在上述部分完成且没有任何异常或中断时执行。
+
+[source,sail]
+----
+// 这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+sp+=stack_adj;
+asm("ret");
+----
+
+<<<
+
+[#insns-cm_mvsa01,reftext="将 a0-a1 移动到两个不同的 s0-s7 寄存器"]
+==== cm.mvsa01
+
+概要：
+
+将 a0-a1 移动到 s0-s7 的两个寄存器
+
+助记符：
+
+cm.mvsa01 _r1s'_, _r2s'_
+
+编码（RV32，RV64）：
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x2,      attr: ['C2'] },
+    { bits:  3, name: 'r2s\'',  attr: [] },
+    { bits:  2, name: 0x1,      attr: [] },
+    { bits:  3, name: 'r1s\'',  attr: [] },
+    { bits:  3, name: 0x3,      attr: [] },
+    { bits:  3, name: 0x5,      attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+[NOTE]
+====
+编码合法时 _r1s'_ != _r2s'_。
+====
+
+汇编语法：
+
+[source,sail]
+----
+cm.mvsa01 r1s', r2s'
+----
+
+描述：
+该指令将 _a0_ 移动到 _r1s'_，并将 _a1_ 移动到 _r2s'_。_r1s'_ 和 _r2s'_ 必须不同。
+执行是原子的，因此不可能观察到仅更新了 _r1s'_ 或 _r2s'_ 之一的状态。
+
+编码使用 _sreg_ 编号说明符而不是 _xreg_ 编号说明符以节省编码空间。
+它们之间的映射在下面的伪代码中指定。
+
+[NOTE]
+====
+_s_ 寄存器映射取自 UABI，可能与当前未批准的 EABI 不匹配。_cm.mvsa01.e_ 可能会在未来包含。
+====
+
+先决条件：
+
+无
+
+32 位等效：
+
+不存在直接等效编码。
+
+操作：
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+if (RV32E && (r1sc>1 || r2sc>1)) {
+  reserved();
+}
+xreg1 = {r1sc[2:1]>0,r1sc[2:1]==0,r1sc[2:0]};
+xreg2 = {r2sc[2:1]>0,r2sc[2:1]==0,r2sc[2:0]};
+X[xreg1] = X[10];
+X[xreg2] = X[11];
+----
+
+<<<
+
+[#insns-cm_mva01s,reftext="将两个 s0-s7 寄存器移动到 a0-a1"]
+==== cm.mva01s
+
+概要：
+
+将两个 s0-s7 寄存器移动到 a0-a1
+
+助记符：
+
+cm.mva01s _r1s'_, _r2s'_
+
+编码 (RV32, RV64):
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x2,      attr: ['C2'] },
+    { bits:  3, name: 'r2s\'',  attr: [] },
+    { bits:  2, name: 0x3,      attr: [] },
+    { bits:  3, name: 'r1s\'',  attr: [] },
+    { bits:  3, name: 0x3,      attr: [] },
+    { bits:  3, name: 0x5,      attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+汇编语法：
+
+[source,sail]
+----
+cm.mva01s r1s', r2s'
+----
+
+描述：
+该指令将 _r1s'_ 移动到 _a0_，并将 _r2s'_ 移动到 _a1_。
+执行是原子的，因此不可能观察到仅更新了 _a0_ 或 _a1_ 之一的状态。
+
+编码使用 _sreg_ 编号说明符而不是 _xreg_ 编号说明符以节省编码空间。
+它们之间的映射在下面的伪代码中指定。
+
+[NOTE]
+====
+_s_ 寄存器映射取自 UABI，可能与当前未批准的 EABI 不匹配。_cm.mva01s.e_ 可能会在未来包含。
+====
+
+先决条件：
+
+无
+
+32 位等效：
+
+不存在直接等效编码。
+
+操作：
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+if (RV32E && (r1sc>1 || r2sc>1)) {
+  reserved();
+}
+xreg1 = {r1sc[2:1]>0,r1sc[2:1]==0,r1sc[2:0]};
+xreg2 = {r2sc[2:1]>0,r2sc[2:1]==0,r2sc[2:0]};
+X[10] = X[xreg1];
+X[11] = X[xreg2];
+----
+
+<<<
+
+[#insns-tablejump,reftext="表跳转概述"]
+=== 表跳转概述
+
+_cm.jt_ (<<#insns-cm_jt>>) 和 _cm.jalt_ (<<#insns-cm_jalt>>) 被称为表跳转。
+
+表跳转使用指令存储器中的 256 项 XLEN 宽表来包含函数地址。
+该表必须至少对齐 64 字节。
+
+表项遵循当前的数据字节序。这与始终为小端字节序的正常指令获取不同。
+
+_cm.jt_ 和 _cm.jalt_ 编码索引表，允许访问整个 XLEN 宽地址空间内的函数。
+
+这被用作一种字典压缩形式，以减少 _jal_ / _auipc+jalr_ / _jr_ / _auipc+jr_ 指令的代码大小。
+
+表跳转允许链接器用 _cm.jt_ 或 _cm.jalt_ 编码和表中的一个条目替换以下指令序列：
+
+* 32 位 _j_ 调用
+* 32 位 _jal_ ra 调用
+* 64 位 _auipc+jr_ 调用到固定位置
+* 64 位 _auipc+jalr ra_ 调用到固定位置
+** 使用 _auipc+jr/jalr_ 序列是因为 PC 的偏移量超出了 ±1MB 范围。
+
+如果实现了返回地址堆栈，则由于 _cm.jalt_ 等效于 _jal ra_，它会推送到堆栈。
+
+==== jvt
+
+表的基地址在 jvt CSR 中（见 <<csrs-jvt>>），每个表项为 XLEN 位。
+
+如果同一个函数在有和没有链接的情况下被调用，则它必须在表中有两个条目。
+这通常是由于同一个函数在有和没有尾调用的情况下被调用造成的。
+
+[#tablejump-fault-handling]
+==== 表跳转故障处理
+
+对于表跳转指令，指令选择的表项被视为指令本身的扩展。
+因此，执行表跳转指令涉及两次指令获取，第一次读取指令 (_cm.jt_/_cm.jalt_)，第二次从跳转向量表 (JVT) 读取。这两个指令获取都是 _隐式_ 读取，并且都需要执行权限；读取权限无关紧要。建议忽略第二次获取的硬件触发器和断点。
+
+对跳转向量表的内存写入需要指令屏障 (_fence.i_) 以确保它们对指令获取可见。
+
+多个上下文可能有不同的跳转向量表。如果自上次 _fence.i_ 以来表在内存中没有更新，则可以在它们之间切换 JVT 而无需指令屏障。
+
+如果在任一指令获取上发生异常，xEPC 设置为表跳转指令的 PC，xCAUSE 设置为预期的故障类型，如果 xTVAL 未设置为零，则包含导致故障的获取地址。
+
+<<<
+[#csrs-jvt,reftext="jvt CSR，表跳转基向量和控制寄存器"]
+==== jvt CSR
+
+概要：
+
+表跳转基向量和控制寄存器
+
+地址：
+
+0x0017
+
+权限：
+
+URW
+
+格式 (RV32):
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  6, name: 'mode',  attr: ['6'] },
+    { bits: 26, name: 'base[XLEN-1:6] (WARL)',  attr: ['XLEN-6'] },
+],config:{bits:32}}
+....
+
+格式 (RV64):
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  6, name: 'mode',  attr: ['6'] },
+    { bits: 58, name: 'base[XLEN-1:6] (WARL)',  attr: ['XLEN-6'] },
+],config:{bits:64}}
+....
+
+描述：
+
+_jvt_ 寄存器是一个 XLEN 位 *WARL* 读/写寄存器，包含跳转表配置，包括跳转表基地址 (BASE) 和跳转表模式 (MODE)。
+
+如果实现了 <<Zcmt>>，则 _jvt_ 也必须实现，但可以包含只读值。如果 _jvt_ 是可写的，则寄存器可能持有的值集可能因实现而异。BASE 字段中的值必须始终在 64 字节边界上对齐。
+
+_jvt.base_ 是一个虚拟地址，只要启用了虚拟内存。
+
+_jvt.base_ 指向的内存被视为指令内存，用于执行表跳转指令，这意味着执行访问权限。
+
+[#JVT-config-table]
+._jvt.mode_ 定义
+[width="60%",options=header]
+|=============================================================================================
+| jvt.mode | 注释
+| 000000 | 跳转表模式
+| 其他 | *保留供将来标准使用*
+|=============================================================================================
+
+_jvt.mode_ 是一个 *WARL* 字段，因此只能编程为已实现的模式。因此，发现机制是尝试编程不同的模式并读回值以查看哪些可用。必须实现跳转表模式。
+
+[NOTE]
+====
+将来，RISC-V 统一发现方法将报告可用模式。
+====
+
+架构状态：
+
+_jvt_ CSR 向系统软件上下文（如操作系统进程）添加架构状态，因此必须在上下文切换时保存/恢复。
+
+状态启用：
+
+如果实现了 Smstateen 扩展，则在 _mstateen0_、_sstateen0_ 和 _hstateen0_ 中实现第 2 位。如果控制 _stateen0_ CSR 的第 2 位为零，则较低特权级别访问 _jvt_ CSR 和执行 _cm.jalt_ 或 _cm.jt_ 指令会导致非法指令陷阱（或适当时，虚拟指令陷阱）。
+
+<<<
+[#insns-cm_jt,reftext="通过表跳转"]
+==== cm.jt
+
+概要：
+
+通过表跳转
+
+助记符：
+
+cm.jt _index_
+
+编码 (RV32, RV64):
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x2,      attr: ['C2'] },
+    { bits:  8, name: 'index',  attr: [] },
+    { bits:  3, name: 0x0,      attr: [] },
+    { bits:  3, name: 0x5,      attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+[NOTE]
+====
+对于此编码解码为 _cm.jt_，_index<32_，否则解码为 _cm.jalt_，见 <<insns-cm_jalt>>。
+====
+
+[NOTE]
+====
+如果 jvt.mode = 0（跳转表模式），则 _cm.jt_ 按此处指定的行为。如果 jvt.mode 是保留值，则 _cm.jt_ 也是保留的。将来，jvt.mode 的其他定义值可能会改变 _cm.jt_ 的行为。
+====
+
+汇编语法：
+
+[source,sail]
+----
+cm.jt index
+----
+
+描述：
+
+_cm.jt_ 从内存中的跳转向量表读取一个条目并跳转到读取的地址。
+
+有关更多信息，请参见 <<insns-tablejump>>。
+
+先决条件：
+
+无
+
+32 位等效：
+
+不存在直接等效编码。
+
+<<<
+
+[#insns-cm_jt-SAIL,reftext="cm.jt SAIL 代码"]
+操作：
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+# target_address 是临时内部状态，不代表真实寄存器
+# InstMemory 是字节索引
+
+switch(XLEN) {
+  32:  table_address[XLEN-1:0] = jvt.base + (index<<2);
+  64:  table_address[XLEN-1:0] = jvt.base + (index<<3);
+}
+
+//从跳转表获取
+target_address[XLEN-1:0] = InstMemory[table_address][XLEN-1:0];
+
+j target_address[XLEN-1:0]&~0x1;
+
+----
+
+<<<
+[#insns-cm_jalt,reftext="通过表跳转并链接"]
+==== cm.jalt
+
+概要：
+
+通过表跳转并可选链接
+
+助记符：
+
+cm.jalt _index_
+
+编码 (RV32, RV64):
+
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x2,      attr: ['C2'] },
+    { bits:  8, name: 'index',  attr: [] },
+    { bits:  3, name: 0x0,      attr: [] },
+    { bits:  3, name: 0x5,      attr: ['FUNCT3'] },
+],config:{bits:16}}
+....
+
+[NOTE]
+====
+对于此编码解码为 _cm.jalt_，_index>=32_，否则解码为 _cm.jt_，见 <<insns-cm_jt>>。
+====
+
+[NOTE]
+====
+如果 jvt.mode = 0（跳转表模式），则 _cm.jalt_ 按此处指定的行为。如果 jvt.mode 是保留值，则 _cm.jalt_ 也是保留的。将来，jvt.mode 的其他定义值可能会改变 _cm.jalt_ 的行为。
+====
+
+汇编语法：
+
+[source,sail]
+----
+cm.jalt index
+----
+
+描述：
+
+_cm.jalt_ 从内存中的跳转向量表读取一个条目并跳转到读取的地址，链接到 _ra_。
+
+有关更多信息，请参见 <<insns-tablejump>>。
+
+先决条件：
+
+无
+
+32 位等效：
+
+不存在直接等效编码。
+
+<<<
+
+[#insns-cm_jalt-SAIL,reftext="cm.jalt SAIL 代码"]
+操作：
+
+[source,sail]
+----
+//这不是 SAIL，这是伪代码。SAIL 尚未编写。
+
+# target_address 是临时内部状态，不代表真实寄存器
+# InstMemory 是字节索引
+
+switch(XLEN) {
+  32:  table_address[XLEN-1:0] = jvt.base + (index<<2);
+  64:  table_address[XLEN-1:0] = jvt.base + (index<<3);
+}
+
+//从跳转表获取
+target_address[XLEN-1:0] = InstMemory[table_address][XLEN-1:0];
+
+jal ra, target_address[XLEN-1:0]&~0x1;
+
+----
+
+
+
