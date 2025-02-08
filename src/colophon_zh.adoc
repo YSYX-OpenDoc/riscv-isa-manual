@@ -1,0 +1,271 @@
+[colophon]
+= 前言
+
+
+本文档描述了 RISC-V 非特权架构。
+
+标记为 *Ratified*（已批准）的 ISA 模块已经在本版本中获得批准。标记为 _Frozen_（冻结）的模块预计在正式批准前不会发生重大变化。标记为 _Draft_（草案）的模块预计在批准前会有调整。
+
+本文档包含以下版本的 RISC-V ISA 模块：
+
+[%autowidth,float="center",align="center",cols="^,<,^",options="header"]
+|===
+|Base |Version |Status
+|*RV32I* |*2.1* |*Ratified*
+|*RV32E* |*2.0* |*Ratified*
+|*RV64E* |*2.0* |*Ratified*
+|*RV64I* |*2.1* |*Ratified*
+|_RV128I_ |_1.7_ |_Draft_
+
+h|Extension h|Version h|Status
+
+|*Zifencei* |*2.0* |*Ratified*
+|*Zicsr* |*2.0* |*Ratified*
+|*Zicntr* |*2.0* |*Ratified*
+|*Zihintntl* |*1.0* |*Ratified*
+|*Zihintpause* |*2.0* |*Ratified*
+|*Zimop* | *1.0* | *Ratified*
+|*Zicond* | *1.0* |*Ratified*
+|*M* |*2.0* |*Ratified*
+|*Zmmul* |*1.0* |*Ratified*
+|*A* |*2.1* |*Ratified*
+|*Zawrs* |*1.01* |*Ratified*
+|*Zacas* |*1.0* |*Ratifed*
+|*RVWMO* |*2.0* |*Ratified*
+|*Ztso* |*1.0* |*Ratified*
+|*CMO* |*1.0* |*Ratified*
+|*F* |*2.2* |*Ratified*
+|*D* |*2.2* |*Ratified*
+|*Q* |*2.2* |*Ratified*
+|*Zfh* |*1.0* |*Ratified*
+|*Zfhmin* |*1.0* |*Ratified*
+|*Zfa* |*1.0* |*Ratified*
+|*Zfinx* |*1.0* |*Ratified*
+|*Zdinx* |*1.0* |*Ratified*
+|*Zhinx* |*1.0* |*Ratified*
+|*Zhinxmin* |*1.0* |*Ratified*
+|*C* |*2.0* |*Ratified*
+|*Zce |*1.0* |*Ratified*
+|*B* |*1.0* |*Ratified*
+|_P_ |_0.2_ |_Draft_
+|*V* |*1.0* |*Ratified*
+|*Zbkb |*1.0* |*Ratified*
+|*Zbkc |*1.0* |*Ratified*
+|*Zbkx |*1.0* |*Ratified*
+|*Zk |*1.0* |*Ratified*
+|*Zks |*1.0* |*Ratified*
+|*Zvbb |*1.0* |*Ratified*
+|*Zvbc |*1.0* |*Ratified*
+|*Zvkg |*1.0* |*Ratified*
+|*Zvkned |*1.0* |*Ratified*
+|*Zvknhb |*1.0* |*Ratified*
+|*Zvksed |*1.0* |*Ratified*
+|*Zvksh |*1.0* |*Ratified*
+|*Zvkt |*1.0* |*Ratified*
+|===
+
+本版本的主要变更包括：
+
+* 包含截至 2024 年 3 月所有批准的扩展。
+* 移除了草案 Zam 扩展，替换为对非对齐原子性粒度 PMA 的定义。
+
+[.big]*_文档版本 20191213-Base-Ratified 的前言_*
+
+本文档描述了 RISC-V 的非特权架构。
+
+标记为 *Ratified*（已批准）的 ISA 模块已经获得批准。标记为 _Frozen_（冻结）的模块预计在正式批准之前不会发生重大变化。标记为 _Draft_（草案）的模块预计在批准前会有调整。
+
+本文档包含以下版本的 RISC-V ISA 模块：
+
+[%autowidth,float="center",align="center",cols="^,<,^",options="header",]
+|===
+|Base |Version |Status
+|RVWMO |2.0 |*Ratified*
+|*RV32I* |*2.1* |*Ratified*
+|*RV64I* |*2.1* |*Ratified*
+|_RV32E_ |_1.9_ |_Draft_
+|_RV128I_ |_1.7_ |_Draft_
+h|Extension h|Version h|Status
+|*M* |*2.0* |*Ratified*
+|*A* |*2.1* |*Ratified*
+|*F* |*2.2* |*Ratified*
+|*D* |*2.2* |*Ratified*
+|*Q* |*2.2* |*Ratified*
+|*C* |*2.0* |*Ratified*
+|_Counters_ |_2.0_ |_Draft_
+|_L_ |_0.0_ |_Draft_
+|_B_ |_0.0_ |_Draft_
+|_J_ |_0.0_ |_Draft_
+|_T_ |_0.0_ |_Draft_
+|_P_ |_0.2_ |_Draft_
+|_V_ |_0.7_ |_Draft_
+|*Zicsr* |*2.0* |*Ratified*
+|*Zifencei* |*2.0* |*Ratified*
+|_Zam_ |_0.1_ |_Draft_
+|_Ztso_ |_0.1_ |_Frozen_
+|===
+
+本版本文档的变更包括：
+
+* A 扩展升级为版本 2.1，并于 2019 年 12 月经董事会批准。
+* 定义了大端字节序的 ISA 变体。
+* 将用于用户模式中断的 N 扩展移至第二卷。
+* 定义了 PAUSE 提示指令。
+
+[.big]*_文档版本 20190608-Base-Ratified 的前言_*
+
+本文档描述了 RISC-V 的非特权架构。
+
+目前，RVWMO 内存模型已获得批准。标记为 *Ratified*（已批准）的 ISA 模块已获得正式批准。标记为 _Frozen_（冻结）的模块预计在正式批准之前不会发生重大变化。标记为 _Draft_（草案）的模块预计在批准之前会有调整。
+
+本文档包含以下版本的 RISC-V ISA 模块：
+
+[%autowidth,float="center",align="center",cols="^,<,^",options="header",]
+|===
+|Base |Version |Status
+|RVWMO |2.0 |*Ratified*
+|*RV32I* |*2.1* |*Ratified*
+|*RV64I* |*2.1* |*Ratified*
+|_RV32E_ |_1.9_ |_Draft_
+|_RV128I_ |_1.7_ |_Draft_
+h|Extension h|Version h|Status
+|*Zifencei* |*2.0* |*Ratified*
+|*Zicsr* |*2.0* |*Ratified*
+|*M* |*2.0* |*Ratified*
+|_A_ |_2.0_ |Frozen
+|*F* |*2.2* |*Ratified*
+|*D* |*2.2* |*Ratified*
+|*Q* |*2.2* |*Ratified*
+|*C* |*2.0* |*Ratified*
+|_Ztso_ |_0.1_ |_Frozen_
+|_Counters_ |_2.0_ |_Draft_
+|_L_ |_0.0_ |_Draft_
+|_B_ |_0.0_ |_Draft_
+|_J_ |_0.0_ |_Draft_
+|_T_ |_0.0_ |_Draft_
+|_P_ |_0.2_ |_Draft_
+|_V_ |_0.7_ |_Draft_
+|_N_ |_1.1_ |_Draft_
+|_Zam_ |_0.1_ |_Draft_
+|===
+
+本版本文档的变更包括：
+
+* 将 2019 年初经董事会批准的 ISA 模块的描述移至 *Ratified*（已批准）部分。
+* 从批准列表中移除了 A 扩展。
+* 修改了文档版本命名方案，以避免与 ISA 模块版本混淆。
+* 将基本整数 ISA 的版本号增至 2.1，以反映批准的 RVWMO 内存模型的存在，并移除了之前基本 ISA 中的 FENCE.I、计数器和 CSR 指令。
+* 将 F 和 D 扩展的版本号增至 2.2，以反映版本 2.1 中对标准 NaN 的变更，以及版本 2.2 中定义的 NaN 框架方案和 FMIN、FMAX 指令定义的更改。
+* 修改文档名称，将其明确为描述“非特权”指令，作为将 ISA 规范与平台配置要求分离的一部分。
+* 添加了执行环境、hart、异常（trap）和内存访问的更清晰和更精确的定义。
+* 定义了指令集类别：标准（_standard_）、保留（_reserved_）、自定义（_custom_）、非标准（_non-standard_） 和 不合规（_non-conforming_）。
+* 移除了暗示操作在可选字节序（alternate endianness）下的文本，因为 RISC-V 尚未定义这种操作模式。
+* 更改了对非对齐加载和存储行为的描述。规范现在允许在执行环境接口中显示非对齐地址陷阱，而不仅仅是在用户模式下强制隐式处理非对齐加载和存储。此外，现在允许报告非对齐访问（包括原子操作）的访问故障异常，这些访问不应被模拟。
+* 将 FENCE.I 从强制性基础 ISA 中移出，并作为单独的扩展（Zifencei）定义。FENCE.I 被移出了 Linux 用户 ABI，并且在具有大型不一致指令和数据缓存的实现中存在问题。然而，它仍然是唯一的标准指令获取一致性机制。
+* 移除了禁止将 RV32E 与其他扩展一起使用的限制。
+* 移除了特定平台在 RV32E 和 RV64I 章节中强制某些编码触发非法指令异常的要求。
+* 计数器/定时器指令现在不再被认为是基础 ISA 的一部分，因此 CSR 指令被移至单独的章节，并标记为 2.0 版本，而非特权计数器则移至另一个单独的章节。计数器尚未准备好获得批准，因为仍存在未解决的问题，包括计数器的不准确性。
+* 添加了一个 CSR 访问顺序模型。
+* 明确定义了 16 位半精度浮点格式在 2 位 _fmt 字段_ 中的表示。
+* 定义了 FMIN.fmt 和 FMAX.fmt 的符号零行为，并更改了它们在信号 NaN 输入上的行为，以符合拟议的 IEEE 754-201x 规范中的 minimumNumber 和 maximumNumber 操作。
+* 定义了内存一致性模型 RVWMO。
+* 定义了 Zam 扩展，该扩展允许非对齐原子操作（AMO）并指定其语义。
+* 定义了 Ztso 扩展，该扩展比 RVWMO 更严格地执行内存一致性模型。
+* 改进了描述和注释内容。
+* 定义了术语 `IALIGN` ，作为描述指令地址对齐约束的简写。
+* 移除了 `P` 扩展章节的内容，因为该内容已被活动任务组文档取代。
+* 移除了 `V` 扩展章节的内容，因为该内容已被单独的向量扩展草案文档取代。
+
+[.big]*_文档版本 2.2 的前言_*
+
+这是描述 RISC-V 用户级架构的 2.2 版本文档。本文档包含以下版本的 RISC-V ISA 模块：
+
+[%autowidth,float="center",align="center",cols="^,<,^",options="header",]
+|===
+h|Base h|_Version_ h|_Draft Frozen?_
+|RV32I |2.0 |Y
+|RV32E |1.9 |N
+|RV64I |2.0 |Y
+|RV128I |1.7 |N
+h|Extension h|Version h|Frozen?
+|M |2.0 |Y
+|A |2.0 |Y
+|F |2.0 |Y
+|D |2.0 |Y
+|Q |2.0 |Y
+|L |0.0 |N
+|C |2.0 |Y
+|B |0.0 |N
+|J |0.0 |N
+|T |0.0 |N
+|P |0.1 |N
+|V |0.7 |N
+|N |1.1 |N
+|===
+
+截至目前，RISC-V 基金会尚未正式批准标准的任何部分，但上述标记为“冻结”（frozen）的组件在批准过程中预计不会发生变化，仅可能会对规范中的模糊点和漏洞进行修订。
+
+本版本文档的主要变更包括：
+
+* 上一版本由原作者以 Creative Commons Attribution 4.0 International License（知识共享署名 4.0 国际许可）发布，当前及未来版本也将使用相同的许可协议发布。
+* 对章节进行了重新排列，将所有扩展模块按照规范顺序放在前面。
+* 改进了描述和注释内容。
+* 修改了 `JALR` 的隐式提示建议，以支持更高效地融合 `LUI/JALR 和 `AUIPC/JALR 组合的宏操作。
+* 明确了 Load-Reserved/Store-Conditional（加载-保留/存储-条件）序列的约束条件。
+* 添加了一个新的控制和状态寄存器（CSR）映射表。
+* 澄清了 `fcsr` 高位的用途和行为。
+* 修正了 `FNMADD.fmt` 和 `FNMSUB.fmt` 指令的描述，之前的描述错误地建议零结果的符号。
+* 将指令 `FMV.S.X` 和 `FMV.X.S` 分别重命名为 `FMV.W.X` 和 `FMV.X.W` ，以与其语义更一致，但其功能未发生变化，旧名称在工具中仍然受支持。
+* 使用 NaN-封装模型，明确了宽浮点寄存器中存储窄 (latexmath:[$<$]FLEN) 浮点值的行为。
+* 定义了 FMA(latexmath:[$\infty$], 0, qNaN) 的异常行为。
+* 添加了一条说明，指出 `P` 扩展可能会被重新设计为整数寄存器上的打包 SIMD 提案，用于定点操作。
+* 提出了向量指令集扩展 V 的草案。
+* 提出了用户级中断扩展 N 的早期草案。
+* 扩展了伪指令列表。
+* 移除了调用约定章节，因为该部分已被 RISC-V ELF psABI 规范 cite:[riscv-elf-psabi] 取代.
+* C 扩展 已被冻结，并重新编号为版本 2.0。
+
+[.big]*_文档版本 2.1 的前言_*
+
+这是描述 RISC-V 用户级架构的 2.1 版本文档。需要注意的是，冻结状态的用户级 ISA 基础模块和扩展 `IMAFDQ` （版本 2.0）自上一版本文档 cite:[riscvtr2], 以来未发生变化，但部分规范中的漏洞已修复，并改进了文档内容。此外，还对软件约定进行了以下调整：
+
+* 对注释部分进行了大量补充和改进。
+* 为每个章节单独分配了版本号。
+* 修改了latexmath:[$>$]64 位的长指令编码，避免在非常长的指令格式中移动 _rd_ 指定符。
+* 现在在基本整数格式中描述 CSR 指令，引入计数器寄存器，而不再仅在浮点部分（以及伴随的特权架构手册）中引入。
+* SCALL 和 SBREAK 指令分别重命名为 `ECALL` 和 `EBREAK`，它们的编码和功能保持不变。
+* 明确了浮点 NaN 的处理，并定义了一种新的标准 NaN 值。
+* 明确了浮点到整数转换中溢出的返回值。
+* 明确了 `LR/SC`（加载-保留/存储-条件）指令序列中允许的成功和必须的失败，包括在序列中使用压缩指令的情况。
+* 提出了一个新的 `RV32E` 基础 ISA 提案，该提案减少了整数寄存器的数量，并支持 `MAC` 扩展。
+* 修订了调用约定。
+* 放宽了软浮点调用约定的堆栈对齐要求，并描述了 RV32E 的调用约定。
+* 修订了 `C` 压缩扩展的提案，版本为 1.9。
+
+[.big]*_版本 2.0 前言_*
+
+这是用户级 ISA 规范的第二次发布。我们计划将基础用户级 ISA 及其通用扩展（例如 IMAFD）固定下来，作为未来开发的基础。自版本 1.0 cite:[riscvtr] 以来，该规范进行了以下更改：
+
+* 将 ISA 分为整数基础部分和若干标准扩展。
+* 重新排列了指令格式，使立即数编码更高效。
+* 定义了基础 ISA 的内存系统为小端字节序，大端或双端字节序为非标准变体。
+* 在原子指令扩展中添加了 Load-Reserved/Store-Conditional（`LR/SC`） 指令。
+* `AMOs` 和 `LR/SC` 支持释放一致性模型。
+* `FENCE` 指令提供了更精细的内存和 I/O 排序。
+* 添加了用于 fetch-and-`XOR`（`AMOXOR`） 的原子指令，并调整了 `AMOSWAP` 的编码以腾出空间。
+* `AUIPC` 指令（将 20 位高位立即数加到 `PC`）取代了仅读取当前 `PC` 值的 `RDNPC` 指令。这显著节省了位置无关代码的空间。
+* `JAL` 指令现在采用 `U-Type` 格式，显式指定目标寄存器，并移除了 `J` 指令，用 `JAL`（rd=`x0`） 取而代之。这消除了唯一隐式目标寄存器的指令，同时移除了基础 ISA 的 `J-Type` 指令格式。虽然 `JAL` 的范围减少了，但基础 ISA 的复杂性大幅降低。
+* 移除了 JALR 指令的静态提示，这些提示在遵循标准调用约定的代码中与 rd 和 rs1 寄存器说明符冗余。
+* JALR 指令现在会清除计算出的目标地址的最低位，以简化硬件设计，并允许在函数指针中存储辅助信息。
+* 将 MFTX.S 和 MFTX.D 指令分别重命名为 FMV.X.S 和 FMV.X.D；同样地，将 MXTF.S 和 MXTF.D 指令重命名为 FMV.S.X 和 FMV.D.X。
+* 将 MFFSR 和 MTFSR 指令分别重命名为 FRCSR 和 FSCSR，并添加了 FRRM、FSRM、FRFLAGS 和 FSFLAGS 指令，以分别访问 fcsr 的舍入模式和异常标志子字段。
+* FMV.X.S 和 FMV.X.D 指令现在从 rs1 获取操作数，而不是从 rs2。此更改简化了数据通路设计。
+* 添加了 FCLASS.S 和 FCLASS.D 浮点分类指令。
+* 采用了更简单的 NaN 生成和传播方案。
+* 对于 RV32I，系统性能计数器扩展至 64 位宽，支持分别读取高 32 位和低 32 位。
+* 定义了规范的 NOP 和 MV 编码。
+* 定义了标准指令长度编码，包括 48 位、64 位和超过 64 位的指令。
+* 添加了 128 位地址空间变体 RV128 的描述。
+* 在 32 位基础指令格式中为用户自定义扩展分配了主要操作码。
+* 修正了一个排版错误，该错误暗示存储指令的数据来源为 rd，实际应为 rs2。
+
