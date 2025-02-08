@@ -1,0 +1,160 @@
+=== 分数 LMUL 示例
+
+本附录提供了一个非规范性示例，以帮助解释编译器在何处可以很好地利用分数 LMUL 功能。
+
+考虑以下用 C 语言编写的（显然是不自然的）循环：
+
+----
+void add_ref(long N,
+    signed char *restrict c_c, signed char *restrict c_a, signed char *restrict c_b,
+    long *restrict l_c, long *restrict l_a, long *restrict l_b,
+    long *restrict l_d, long *restrict l_e, long *restrict l_f,
+    long *restrict l_g, long *restrict l_h, long *restrict l_i,
+    long *restrict l_j, long *restrict l_k, long *restrict l_l,
+    long *restrict l_m) {
+  long i;
+  for (i = 0; i < N; i++) {
+    c_c[i] = c_a[i] + c_b[i]; // 注意这个 'char' 加法，导致了混合类型情况
+    l_c[i] = l_a[i] + l_b[i];
+    l_f[i] = l_d[i] + l_e[i];
+    l_i[i] = l_g[i] + l_h[i];
+    l_l[i] = l_k[i] + l_j[i];
+    l_m[i] += l_m[i] + l_c[i] + l_f[i] + l_i[i] + l_l[i];
+  }
+}
+----
+
+由于需要许多输入变量和临时变量，示例循环具有高寄存器压力。编译器意识到循环中有两种数据类型：8 位 'char' 和 64 位 'long *'。如果没有分数 LMUL，编译器将被迫为 8 位计算使用 LMUL=1，为 64 位计算使用 LMUL=8，以便在同一循环迭代中所有计算的元素数量相等。在 LMUL=8 下，寄存器分配器只有 4 个可用寄存器。鉴于此循环中需要大量 64 位变量和临时变量，编译器最终生成了大量溢出代码。下面的代码演示了这种效果：
+
+----
+.LBB0_4:                                # %vector.body
+                                        # =>这个内部循环头：深度=1
+	add	s9, a2, s6
+	vsetvli	s1, zero, e8,m1,ta,mu
+	vle8.v	v25, (s9)
+	add	s1, a3, s6
+	vle8.v	v26, (s1)
+	vadd.vv	v25, v26, v25
+	add	s1, a1, s6
+	vse8.v	v25, (s1)
+	add	s9, a5, s10
+	vsetvli	s1, zero, e64,m8,ta,mu
+	vle64.v	v8, (s9)
+	add	s1, a6, s10
+	vle64.v	v16, (s1)
+	add	s1, a7, s10
+	vle64.v	v24, (s1)
+	add	s1, s3, s10
+	vle64.v	v0, (s1)
+	sd	a0, -112(s0)
+	ld	a0, -128(s0)
+	vs8r.v	v0, (a0) # 溢出 LMUL=8
+	add	s9, t6, s10
+	add	s11, t5, s10
+	add	ra, t2, s10
+	add	s1, t3, s10
+	vle64.v	v0, (s9)
+	ld	s9, -136(s0)
+	vs8r.v	v0, (s9) # 溢出 LMUL=8
+	vle64.v	v0, (s11)
+	ld	s9, -144(s0)
+	vs8r.v	v0, (s9) # 溢出 LMUL=8
+	vle64.v	v0, (ra)
+	ld	s9, -160(s0)
+	vs8r.v	v0, (s9) # 溢出 LMUL=8
+	vle64.v	v0, (s1)
+	ld	s1, -152(s0)
+	vs8r.v	v0, (s1) # 溢出 LMUL=8
+	vadd.vv	v16, v16, v8
+	ld	s1, -128(s0)
+	vl8r.v	v8, (s1) # 重新加载 LMUL=8
+	vadd.vv	v8, v8, v24
+	ld	s1, -136(s0)
+	vl8r.v	v24, (s1) # 重新加载 LMUL=8
+	ld	s1, -144(s0)
+	vl8r.v	v0, (s1) # 重新加载 LMUL=8
+	vadd.vv	v24, v0, v24
+	ld	s1, -128(s0)
+	vs8r.v	v24, (s1) # 溢出 LMUL=8
+	ld	s1, -152(s0)
+	vl8r.v	v0, (s1) # 重新加载 LMUL=8
+	ld	s1, -160(s0)
+	vl8r.v	v24, (s1) # 重新加载 LMUL=8
+	vadd.vv	v0, v0, v24
+	add	s1, a4, s10
+	vse64.v	v16, (s1)
+	add	s1, s2, s10
+	vse64.v	v8, (s1)
+	vadd.vv	v8, v8, v16
+	add	s1, t4, s10
+	ld	s9, -128(s0)
+	vl8r.v	v16, (s9) # 重新加载 LMUL=8
+	vse64.v	v16, (s1)
+	add	s9, t0, s10
+	vadd.vv	v8, v8, v16
+	vle64.v	v16, (s9)
+	add	s1, t1, s10
+	vse64.v	v0, (s1)
+	vadd.vv	v8, v8, v0
+	vsll.vi	v16, v16, 1
+	vadd.vv	v8, v8, v16
+	vse64.v	v8, (s9)
+	add	s6, s6, s7
+	add	s10, s10, s8
+	bne	s6, s4, .LBB0_4
+----
+
+如果编译器允许使用分数 LMUL=1/2 而不是为 8 位计算使用 LMUL=1，则 64 位计算可以使用 LMUL=4（注意，与前一个示例中相同的 64 位元素和 8 位元素的比例保持不变）。现在编译器有 8 个可用寄存器进行寄存器分配，结果没有溢出代码，如下面的循环所示：
+
+----
+.LBB0_4:                                # %vector.body
+                                        # =>这个内部循环头：深度=1
+	add	s9, a2, s6
+	vsetvli	s1, zero, e8,mf2,ta,mu // LMUL=1/2 !
+	vle8.v	v25, (s9)
+	add	s1, a3, s6
+	vle8.v	v26, (s1)
+	vadd.vv	v25, v26, v25
+	add	s1, a1, s6
+	vse8.v	v25, (s1)
+	add	s9, a5, s10
+	vsetvli	s1, zero, e64,m4,ta,mu // LMUL=4
+	vle64.v	v28, (s9)
+	add	s1, a6, s10
+	vle64.v	v8, (s1)
+	vadd.vv	v28, v8, v28
+	add	s1, a7, s10
+	vle64.v	v8, (s1)
+	add	s1, s3, s10
+	vle64.v	v12, (s1)
+	add	s1, t6, s10
+	vle64.v	v16, (s1)
+	add	s1, t5, s10
+	vle64.v	v20, (s1)
+	add	s1, a4, s10
+	vse64.v	v28, (s1)
+	vadd.vv	v8, v12, v8
+	vadd.vv	v12, v20, v16
+	add	s1, t2, s10
+	vle64.v	v16, (s1)
+	add	s1, t3, s10
+	vle64.v	v20, (s1)
+	add	s1, s2, s10
+	vse64.v	v8, (s1)
+	add	s9, t4, s10
+	vadd.vv	v16, v20, v16
+	add	s11, t0, s10
+	vle64.v	v20, (s11)
+	vse64.v	v12, (s9)
+	add	s1, t1, s10
+	vse64.v	v16, (s1)
+	vsll.vi	v20, v20, 1
+	vadd.vv	v28, v8, v28
+	vadd.vv	v28, v28, v12
+	vadd.vv	v28, v28, v16
+	vadd.vv	v28, v28, v20
+	vse64.v	v28, (s11)
+	add	s6, s6, s7
+	add	s10, s10, s8
+	bne	s6, s4, .LBB0_4
+----
