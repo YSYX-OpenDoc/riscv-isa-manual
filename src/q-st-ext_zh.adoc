@@ -1,0 +1,79 @@
+== "Q" 扩展用于四精度浮点，版本 2.2
+
+本章描述了 Q 标准扩展，用于符合 IEEE 754-2008 算术标准的 128 位四精度二进制浮点指令。四精度二进制浮点指令集扩展被命名为 "Q"；它依赖于双精度浮点扩展 D。浮点寄存器现在扩展为可以保存单精度、双精度或四精度浮点值（FLEN=128）。<<nanboxing>> 中描述的 NaN-boxing 方案现在递归扩展，以允许单精度值在双精度值内进行 NaN-boxing，而双精度值本身在四精度值内进行 NaN-boxing。
+
+=== 四精度加载和存储指令
+
+添加了新的 128 位 LOAD-FP 和 STORE-FP 指令变体，使用 funct3 宽度字段的新值进行编码。
+
+include::images/wavedrom/quad-ls.adoc[]
+[[quad-ls]]
+//.四精度加载和存储
+
+只有在有效地址自然对齐且 XLEN=128 时，FLQ 和 FSQ 才能保证原子执行。
+
+FLQ 和 FSQ 不会修改正在传输的位；特别是，非规范 NaN 的有效负载会被保留。
+
+=== 四精度计算指令
+
+在大多数指令的格式字段中添加了一个新的支持格式，如 <<fpextfmt>> 所示。
+
+[[fpextfmt]]
+.格式字段编码.
+[%autowidth,float="center",align="center",cols="^,^,<",options="header",]
+|===
+|_fmt_ 字段 |助记符 |含义
+|00 |S |32 位单精度
+|01 |D |64 位双精度
+|10 |H |16 位半精度
+|11 |Q |128 位四精度
+|===
+
+四精度浮点计算指令的定义类似于其双精度对应指令，但操作于四精度操作数并产生四精度结果。
+
+include::images/wavedrom/quad-compute.adoc[]
+[[quad-compute]]
+//.四精度计算
+
+=== 四精度转换和移动指令
+
+添加了新的浮点到整数和整数到浮点的转换指令。这些指令的定义类似于双精度到整数和整数到双精度的转换指令。FCVT.W.Q 或 FCVT.L.Q 将四精度浮点数分别转换为有符号 32 位或 64 位整数。FCVT.Q.W 或 FCVT.Q.L 将 32 位或 64 位有符号整数分别转换为四精度浮点数。FCVT.WU.Q、FCVT.LU.Q、FCVT.Q.WU 和 FCVT.Q.LU 变体转换为或从无符号整数值转换。FCVT.L[U].Q 和 FCVT.Q.L[U] 是 RV64 专用指令。注意 FCVT.Q.L[U] 总是产生精确结果，不受舍入模式影响。
+
+include::images/wavedrom/quad-cnvrt-mv.adoc[]
+[[quad-cnvrt-mv]]
+//.四精度转换和移动
+
+添加了新的浮点到浮点的转换指令。这些指令的定义类似于双精度浮点到浮点的转换指令。FCVT.S.Q 或 FCVT.Q.S 将四精度浮点数分别转换为单精度浮点数，反之亦然。FCVT.D.Q 或 FCVT.Q.D 将四精度浮点数分别转换为双精度浮点数，反之亦然。
+
+include::images/wavedrom/quad-cnvt-interchange.adoc[]
+[[quad-convrt-interchange]]
+//.四精度转换和移动互换
+
+浮点到浮点的符号注入指令，FSGNJ.Q、FSGNJN.Q 和 FSGNJX.Q 的定义类似于双精度符号注入指令。
+
+include::images/wavedrom/quad-cnvrt-intch-xqqx.adoc[]
+[[quad-cnvrt-intch-xqqx]]
+//.四精度转换和移动互换 XQ-QX
+
+FMV.X.Q 和 FMV.Q.X 指令在 RV32 或 RV64 中不提供，因此四精度位模式必须通过内存移动到整数寄存器。
+
+[NOTE]
+====
+RV128 将在 Q 扩展中支持 FMV.X.Q 和 FMV.Q.X。
+====
+
+=== 四精度浮点比较指令
+
+四精度浮点比较指令的定义类似于其双精度对应指令，但操作于四精度操作数。
+
+include::images/wavedrom/quad-float-compare.adoc[]
+[[quad-float-compare]]
+//.四精度浮点比较
+
+=== 四精度浮点分类指令
+
+四精度浮点分类指令 FCLASS.Q 的定义类似于其双精度对应指令，但操作于四精度操作数。
+
+include::images/wavedrom/quad-float-clssfy.adoc[]
+[[quad-float-clssfy]]
+//.四精度浮点分类
