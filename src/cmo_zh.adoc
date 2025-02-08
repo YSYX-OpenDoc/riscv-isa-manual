@@ -534,13 +534,13 @@ The following instructions comprise the Zicbop extension:
 [#insns-cbo_clean,reftext="Cache Block Clean"]
 ==== cbo.clean
 
-Synopsis::
+简述::
 对缓存块执行清理操作
 
-Mnemonic::
+助记符::
 cbo.clean _offset_(_base_)
 
-Encoding::
+编码::
 [wavedrom, , svg]
 ....
 {reg:[
