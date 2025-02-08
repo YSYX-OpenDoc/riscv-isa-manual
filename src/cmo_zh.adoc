@@ -353,19 +353,19 @@ x{csrname} 寄存器根据当前特权模式和适当的 CSR 状态控制 CBO �
 [source,sail,subs="attributes+"]
 --
 
-// illegal instruction exceptions
+// 非法指令异常
 if (((priv_mode != M) && (m{csrname}.CBIE == 00)) ||
     ((priv_mode == U) && (s{csrname}.CBIE == 00)))
 {
   <raise illegal instruction exception>
 }
-// virtual instruction exceptions
+// 虚拟指令异常
 else if (((priv_mode == VS) && (h{csrname}.CBIE == 00)) ||
          ((priv_mode == VU) && ((h{csrname}.CBIE == 00) || (s{csrname}.CBIE == 00))))
 {
   <raise virtual instruction exception>
 }
-// execute instruction
+// 执行指令
 else
 {
   if (((priv_mode != M) && (m{csrname}.CBIE == 01)) ||
@@ -421,13 +421,13 @@ else
 [source,sail,subs="attributes+"]
 --
 
-// illegal instruction exceptions
+// 非法指令异常
 if (((priv_mode != M) && !m{csrname}.CBZE) ||
     ((priv_mode == U) && !s{csrname}.CBZE))
 {
   <raise illegal instruction exception>
 }
-// virtual instruction exceptions
+// 虚拟指令异常
 else if (((priv_mode == VS) && !h{csrname}.CBZE) ||
          ((priv_mode == VU) && !(h{csrname}.CBZE && s{csrname}.CBZE)))
 {
