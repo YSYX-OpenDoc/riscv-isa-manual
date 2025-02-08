@@ -1,0 +1,4771 @@
+== 密码学扩展：标量和熵源指令，版本 1.0.1
+
+=== 变更日志
+
+[cols="1,5"]
+|===
+| 版本 | 变更
+
+| `v1.0.1`
+| 修正了拼写错误，显示 `c.srli`、`c.srai` 和 `c.slli` 是 RV64 中的 Zkt 指令。
+
+| `v1.0.0`
+| 初始发布
+|===
+
+[[crypto_scalar_introduction]]
+=== 介绍
+
+本文档描述了 RISC-V 的 _标量_ 密码学扩展。
+本文档中描述的所有指令都使用通用的 `X` 寄存器，并遵守 2 读 1 写寄存器访问约束。
+这些指令设计为轻量级，适用于 `32` 和 `64` 位基础架构；从嵌入式物联网类核心到不实现矢量单元的大型应用类核心。
+
+本文档还描述了熵源的架构接口，可用于生成密码学密钥。
+见 <<crypto_scalar_es>>。
+
+它还包含一个机制，允许核心实现者在 <<crypto_scalar_zkt>> 中提供 _"恒定时间执行"_ 保证。
+
+伴随文档 _第二卷：矢量指令_ 描述了基于 RISC-V 矢量扩展的指令提案。
+矢量密码学扩展目前正在等待基础矢量扩展稳定下来。
+我们预计将在 2021 年第四季度或 2022 年第一季度认真开展这项工作。
+
+[[crypto_scalar_audience]]
+==== 目标受众
+
+密码学是一个专业的学科，需要具有不同背景的人合作以安全高效地实现。
+在可能的情况下，我们编写了这份规范，使其易于所有人理解，尽管我们认识到，动机和对算法或其他规范和标准的引用可能对非领域专家来说不太熟悉。
+
+我们预计这份规范将被具有不同背景的各种人阅读和执行。
+我们在此尝试捕捉这些背景，并简要解释我们期望他们了解的内容，以及它与规范的关系。
+我们希望这有助于人们理解哪些方面的规范对他们特别相关，哪些方面他们可以（安全地！）忽略或传递给同事。
+
+密码学家和密码学软件开发人员::
+这些是我们期望使用本规范中的指令编写代码的人。
+他们应该很明显地理解我们包含的指令的动机，并熟悉我们引用的大多数算法和外部标准。
+我们预计恒定时间执行部分 (<<crypto_scalar_zkt>>) 和熵源 (<<crypto_scalar_es>>) 主要在他们的帮助下理解。
+
+计算机架构师::
+我们不期望架构师具有密码学背景。
+尽管如此，我们期望架构师能够检查我们的指令以发现实现问题，理解指令在上下文中的使用方式，并就如何最好地将密码学家想要的功能适配到 ISA 接口提供建议。
+
+数字设计工程师和微架构师::
+这些是将在核心内部实现规范的人。同样，不假设他们具有密码学专业知识，但我们期望他们解释规范并预见任何硬件实现问题，例如，高频设计考虑适用的地方，或存在延迟/面积权衡的地方等。
+特别是，他们应该了解如何在硬件中高效实现 AES 和 SM4 SBoxes 的文献。
+
+验证工程师::
+负责确保扩展在硬件中的正确实现。
+不假设他们具有密码学背景。
+我们期望他们从规范中识别出有趣的测试用例。理解其实际使用情况将有助于此。
+我们不期望验证工程师在这个意义上是熵源设计或认证的专家，因为这是一个非常专业的领域。
+然而，我们期望他们识别出所有关于熵源接口的 _架构_ 测试用例。
+
+这些绝不是唯一关心规范的人，但他们是我们在编写时最考虑的人。
+
+[[crypto_scalar_sail_specifications]]
+==== Sail 规范
+
+RISC-V 维护一个
+link:https://github.com/riscv/sail-riscv[正式模型]
+的 ISA 规范，
+使用 Sail ISA 规范语言实现
+cite:[sail]。
+请注意，_Sail_ 指的是规范语言本身，
+并且有一个 _RISC-V 模型_，使用 Sail 编写。
+不正确地称之为 "Sail 模型" 是不明确的，因为有许多使用 Sail 实现的不同 ISA 模型。我们将 RISC-V 的 Sail 实现称为
+"RISC-V Sail 模型"。
+
+密码学扩展使用来自实际模型的内联 Sail 代码片段来提供指令功能的规范描述。
+每个指令都附有其在 Sail 中的表达式，并包括对支持函数的调用，这些函数过于冗长，无法直接包含在规范中。
+这些支持代码列在
+<<crypto_scalar_appx_sail>>。
+推荐阅读
+link:https://github.com/rems-project/sail/blob/sail2/manual.pdf[Sail 手册]
+以便最好地理解代码片段。
+
+请注意，本文档仅包含正式模型的一个子集：请参阅正式模型 Github
+link:https://github.com/riscv/sail-riscv[存储库]
+以获取完整模型。
+
+[[crypto_scalar_policies]]
+==== 政策
+
+在创建此提案时，我们尝试遵循以下政策：
+
+* 在以下选择之间：
+  . 支持算法的多样化实现策略
+  或
+  . 支持单一实现风格，该风格更高效/成本更低；
+  密码扩展将选择更受约束但更高效的选项。
+  这符合 RISC-V 规范其他部分的常见模式，其中给出了执行特定任务的推荐（但不要求）指令序列作为示例，以便硬件和软件实现者都可以仅针对单一用例进行优化。
+
+* 扩展将设计为良好地支持 _现有_ 标准化的密码学构造。
+  它不会尝试支持提议的标准，或仅存在于学术界的密码学构造。
+  与 RISC-V 密码学扩展标准化同时或之后确定的密码学标准将通过未来的补充或版本处理。预计 NIST 轻量级密码学竞赛和 NIST 后量子密码学竞赛可能会以这种方式处理，具体取决于时间表。
+
+* 历史上，有一些讨论
+  cite:[LSYRR:04]
+  关于在通用计算中支持的新操作如何启用新的密码学算法基础。
+  标准不会尝试预测可能对未来密码学构造有用的新低级操作。
+
+* 关于侧信道对策：
+  在相关的地方，建议的指令必须旨在消除任何时间侧信道的可能性。
+  对于基于功率或电磁（EM）测量的侧信道，扩展不会旨在支持在 ISA 抽象层之上实现的对策。
+  在相关的地方，将给出关于微架构如何以功率/EM 侧信道抗性方式实现指令的建议。
+
+[[crypto_scalar_extensions]]
+=== 扩展概述
+
+标量密码学指令集扩展引入的扩展组在此列出。
+
+检测单个密码学扩展使用统一的软件 RISC-V 发现方法。
+
+[NOTE]
+====
+在撰写本文时，这些发现机制仍在进行中。
+====
+
+.关于扩展理由的说明
+[NOTE, caption="SH"]
+====
+专用加密和解密指令被分为不同的功能组，因为某些用例（例如，TLS 1.3 中的 Galois/Counter 模式）不需要解密功能。
+
+NIST 和 ShangMi 算法套件被分开，因为它们的有用性在很大程度上取决于设备预期运行的国家。NIST 密码是大多数标准化互联网协议的一部分，而 ShangMi 密码在中国使用是必需的。
+====
+
+[[zbkb,Zbkb]]
+==== `Zbkb` - 用于密码学的位操作指令
+
+这些是位操作扩展 `Zbb` 的子集，特别适用于密码学。
+
+注意：其中一些指令在第一个位操作批准包中定义，而有些则没有（
+<<insns-pack,pack>>,
+<<insns-packh,packh>>,
+<<insns-packw,packw>>,
+<<insns-brev8,brev8>>,
+<<insns-zip,zip>>,
+<<insns-unzip,unzip>>）。
+<<zbkb>> 中的所有指令在本文档中都有完整的规范，包括那些不在初始位操作批准包中的指令。
+这是为了使当前规范作为独立文档完整。
+不可避免地，位操作和标量密码学规范文档之间可能会有小的差异，因为它们以不同的速度移动。
+当这种情况发生时，假设位操作规范具有最新版本的位操作指令。
+这是在标量密码学和位操作在公开审查前快速迭代时的一个不幸但必要的权宜之计。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; |  ror         | <<insns-ror>>
+| &#10003; | &#10003; |  rol         | <<insns-rol>>
+| &#10003; | &#10003; |  rori        | <<insns-rori>>
+|          | &#10003; |  rorw        | <<insns-rorw>>
+|          | &#10003; |  rolw        | <<insns-rolw>>
+|          | &#10003; |  roriw       | <<insns-roriw>>
+| &#10003; | &#10003; |  andn        | <<insns-andn>>
+| &#10003; | &#10003; |  orn         | <<insns-orn>>
+| &#10003; | &#10003; |  xnor        | <<insns-xnor>>
+| &#10003; | &#10003; |  pack        | <<insns-pack>>
+| &#10003; | &#10003; |  packh       | <<insns-packh>>
+|          | &#10003; |  packw       | <<insns-packw>>
+| &#10003; | &#10003; |  brev8       | <<insns-brev8>>
+| &#10003; | &#10003; |  rev8        | <<insns-rev8>>
+| &#10003; |          |  zip         | <<insns-zip>>
+| &#10003; |          |  unzip       | <<insns-unzip>>
+|===
+
+[[zbkc,Zbkc]]
+==== `Zbkc` - 无进位乘法指令
+
+用于 Galois/Counter 模式的恒定时间无进位乘法。
+这些与 <<zbkb>> 分开，因为它们具有相当大的实现开销，无法在其他指令中摊销。
+
+注意：这些指令在第一个位操作批准包中为 `Zbc` 扩展定义。
+<<zbkc>> 中的所有指令在本文档中都有完整的规范，包括那些不在初始位操作批准包中的指令。
+这是为了使当前规范作为独立文档完整。
+不可避免地，位操作和标量密码学规范文档之间可能会有小的差异，因为它们以不同的速度移动。
+当这种情况发生时，假设位操作规范具有最新版本的位操作指令。
+这是在标量密码学和位操作在公开审查前快速迭代时的一个不幸但必要的权宜之计。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; |  clmul       | <<insns-clmul>>
+| &#10003; | &#10003; |  clmulh      | <<insns-clmulh>>
+|===
+
+[[zbkx,Zbkx]]
+==== `Zbkx` - 交叉开关置换指令
+
+这些指令对于以恒定时间实现 SBoxes 并可能具有 DPA 保护非常有用。
+这些与 <<zbkb>> 分开，因为它们具有无法在其他指令中摊销的实现开销。
+
+注意：所有这些指令都缺席于第一个位操作批准包。
+因此，<<zbkx>> 中的所有指令在本文档中都有完整的规范。
+这是为了使当前规范作为独立文档完整。
+不可避免地，位操作和标量密码学规范文档之间可能会有小的差异，因为它们以不同的速度移动。
+当这种情况发生时，假设位操作规范具有最新版本的位操作指令。
+这是在标量密码学和位操作在公开审查前快速迭代时的一个不幸但必要的权宜之计。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; |  xperm8      | <<insns-xperm8>>
+| &#10003; | &#10003; |  xperm4      | <<insns-xperm4>>
+|===
+
+[[zknd,Zknd]]
+==== `Zknd` - NIST 套件：AES 解密
+
+用于加速 AES 块密码的解密和密钥调度功能的指令。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; |          | aes32dsi     | <<insns-aes32dsi>>
+| &#10003; |          | aes32dsmi    | <<insns-aes32dsmi>>
+|          | &#10003; | aes64ds      | <<insns-aes64ds>>
+|          | &#10003; | aes64dsm     | <<insns-aes64dsm>>
+|          | &#10003; | aes64im      | <<insns-aes64im>>
+|          | &#10003; | aes64ks1i    | <<insns-aes64ks1i>>
+|          | &#10003; | aes64ks2     | <<insns-aes64ks2>>
+|===
+
+注意：<<insns-aes64ks1i>> 和 <<insns-aes64ks2>> 指令同时存在于 <<zknd>> 和 <<zkne>> 扩展中。
+
+[[zkne,Zkne]]
+==== `Zkne` - NIST 套件：AES 加密
+
+用于加速 AES 块密码的加密和密钥调度功能的指令。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; |          | aes32esi     | <<insns-aes32esi>>
+| &#10003; |          | aes32esmi    | <<insns-aes32esmi>>
+|          | &#10003; | aes64es      | <<insns-aes64es>>
+|          | &#10003; | aes64esm     | <<insns-aes64esm>>
+|          | &#10003; | aes64ks1i    | <<insns-aes64ks1i>>
+|          | &#10003; | aes64ks2     | <<insns-aes64ks2>>
+|===
+
+注意：<<insns-aes64ks1i,`aes64ks1i`>> 和 <<insns-aes64ks2,`aes64ks2`>> 指令同时存在于 <<zknd>> 和 <<zkne>> 扩展中。
+
+[[zknh,Zknh]]
+==== `Zknh` - NIST 套件：哈希函数指令
+
+用于加速 SHA2 系列密码学哈希函数的指令，如 cite:[nist:fips:180:4] 中所述。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; | sha256sig0   | <<insns-sha256sig0>>
+| &#10003; | &#10003; | sha256sig1   | <<insns-sha256sig1>>
+| &#10003; | &#10003; | sha256sum0   | <<insns-sha256sum0>>
+| &#10003; | &#10003; | sha256sum1   | <<insns-sha256sum1>>
+| &#10003; |          | sha512sig0h  | <<insns-sha512sig0h>>
+| &#10003; |          | sha512sig0l  | <<insns-sha512sig0l>>
+| &#10003; |          | sha512sig1h  | <<insns-sha512sig1h>>
+| &#10003; |          | sha512sig1l  | <<insns-sha512sig1l>>
+| &#10003; |          | sha512sum0r  | <<insns-sha512sum0r>>
+| &#10003; |          | sha512sum1r  | <<insns-sha512sum1r>>
+|          | &#10003; | sha512sig0   | <<insns-sha512sig0>>
+|          | &#10003; | sha512sig1   | <<insns-sha512sig1>>
+|          | &#10003; | sha512sum0   | <<insns-sha512sum0>>
+|          | &#10003; | sha512sum1   | <<insns-sha512sum1>>
+|===
+
+[[zksed,Zksed]]
+==== `Zksed` - ShangMi 套件：SM4 块密码指令
+
+用于加速 SM4 块密码的指令。
+注意，与 AES 不同，此密码使用相同的核心操作进行加密和解密，因此只有一个扩展。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; | sm4ed        | <<insns-sm4ed>>
+| &#10003; | &#10003; | sm4ks        | <<insns-sm4ks>>
+|===
+
+[[zksh,Zksh]]
+==== `Zksh` - ShangMi 套件：SM3 哈希函数指令
+
+用于加速 SM3 哈希函数的指令。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; | sm3p0        | <<insns-sm3p0>>
+| &#10003; | &#10003; | sm3p1        | <<insns-sm3p1>>
+|===
+
+[[zkr,Zkr]]
+==== `Zkr` - 熵源扩展
+
+熵源扩展在地址 `0x015` 定义了 `seed` CSR。
+此 CSR 提供最多 16 位物理 `entropy` 位，可用于生成密码学随机位。
+
+请参阅 <<crypto_scalar_es>> 以获取规范和访问控制说明。<<crypto_scalar_appx_es>> 包含设计原理和对实现者的进一步建议。
+
+[[zkn,Zkn]]
+==== `Zkn` - NIST 算法套件
+
+此扩展是以下其他扩展集的简写：
+
+[%header,cols="^1,4"]
+|===
+|包含的扩展
+|描述
+
+| <<zbkb>>  | 用于密码学的位操作指令。
+| <<zbkc>>  | 无进位乘法指令。
+| <<zbkx>>  | 交叉开关置换指令。
+| <<zkne>>  | AES 加密指令。
+| <<zknd>>  | AES 解密指令。
+| <<zknh>>  | SHA2 哈希函数指令。
+|===
+
+实现 `Zkn` 的核心必须实现上述所有扩展。
+
+[[zks,Zks]]
+==== `Zks` - ShangMi 算法套件
+
+此扩展是以下其他扩展集的简写：
+
+[%header,cols="^1,4"]
+|===
+|包含的扩展
+|描述
+
+| <<zbkb>>  | 用于密码学的位操作指令。
+| <<zbkc>>  | 无进位乘法指令。
+| <<zbkx>>  | 交叉开关置换指令。
+| <<zksed>> | SM4 块密码指令。
+| <<zksh>>  | SM3 哈希函数指令。
+|===
+
+实现 `Zks` 的核心必须实现上述所有扩展。
+
+[[zk,Zk]]
+==== `Zk` - 标准标量密码学扩展
+
+此扩展是以下其他扩展集的简写：
+
+[%header,cols="^1,4"]
+|===
+|包含的扩展
+|描述
+
+| <<zkn>>  | NIST 算法套件扩展。
+| <<zkr>>  | 熵源扩展。
+| <<crypto_scalar_zkt,Zkt>>  | 数据独立执行延迟扩展。
+|===
+
+实现 `Zk` 的核心必须实现上述所有扩展。
+
+==== `Zkt` - 数据独立执行延迟
+
+此扩展允许 CPU 实现者向密码学软件开发人员表明，RISC-V 指令的子集保证其执行延迟与其操作的数据值无关。
+此扩展的完整描述见 <<crypto_scalar_zkt>>。
+
+// ------------------------------------------------------------
+
+[[crypto_scalar_insns, reftext="标量密码学指令"]]
+=== 指令
+
+[#insns-aes32dsi, reftext="AES 最终轮解密 (RV32)"]
+==== aes32dsi
+
+概要::
+RV32 的 AES 最终轮解密指令。
+
+助记符::
+aes32dsi rd, rs1, rs2, bs
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x15},
+{bits: 2, name: 'bs'},
+]}
+....
+
+描述::
+此指令根据 `bs` 从 `rs2` 中获取单个字节。
+对此应用逆 AES SBox 操作，并将结果与 `rs1` 进行异或。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (AES32DSI (bs,rs2,rs1,rd)) = {
+  let shamt   : bits( 5) = bs @ 0b000; /* shamt = bs*8 */
+  let si      : bits( 8) = (X(rs2)[31..0] >> shamt)[7..0]; /* SBox 输入 */
+  let so      : bits(32) = 0x000000 @ aes_sbox_inv(si);
+  let result  : bits(32) = X(rs1)[31..0] ^ rol32(so, unsigned(shamt));
+  X(rd) = EXTS(result); RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknd>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes32dsmi, reftext="AES 中间轮解密 (RV32)"]
+==== aes32dsmi
+
+概要::
+RV32 的 AES 中间轮解密指令。
+
+助记符::
+aes32dsmi rd, rs1, rs2, bs
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x17},
+{bits: 2, name: 'bs'},
+]}
+....
+
+描述::
+此指令根据 `bs` 从 `rs2` 中获取单个字节。
+对此应用逆 AES SBox 操作和部分逆 MixColumn，然后与 `rs1` 进行异或。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (AES32DSMI (bs,rs2,rs1,rd)) = {
+  let shamt   : bits( 5) = bs @ 0b000; /* shamt = bs*8 */
+  let si      : bits( 8) = (X(rs2)[31..0] >> shamt)[7..0]; /* SBox 输入 */
+  let so      : bits( 8) = aes_sbox_inv(si);
+  let mixed   : bits(32) = aes_mixcolumn_byte_inv(so);
+  let result  : bits(32) = X(rs1)[31..0] ^ rol32(mixed, unsigned(shamt));
+  X(rd) = EXTS(result); RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknd>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes32esi, reftext="AES 最终轮加密 (RV32)"]
+==== aes32esi
+
+概要::
+RV32 的 AES 最终轮加密指令。
+
+助记符::
+aes32esi rd, rs1, rs2, bs
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x11},
+{bits: 2, name: 'bs'},
+]}
+....
+
+描述::
+此指令根据 `bs` 从 `rs2` 中获取单个字节。
+对此应用正向 AES SBox 操作，然后与 `rs1` 进行异或。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (AES32ESI (bs,rs2,rs1,rd)) = {
+  let shamt   : bits( 5) = bs @ 0b000; /* shamt = bs*8 */
+  let si      : bits( 8) = (X(rs2)[31..0] >> shamt)[7..0]; /* SBox 输入 */
+  let so      : bits(32) = 0x000000 @ aes_sbox_fwd(si);
+  let result  : bits(32) = X(rs1)[31..0] ^ rol32(so, unsigned(shamt));
+  X(rd) = EXTS(result); RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zkne>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes32esmi, reftext="AES 中间轮加密 (RV32)"]
+==== aes32esmi
+
+概要::
+RV32 的 AES 中间轮加密指令。
+
+助记符::
+aes32esmi rd, rs1, rs2, bs
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x13},
+{bits: 2, name: 'bs'},
+]}
+....
+
+描述::
+此指令根据 `bs` 从 `rs2` 中获取单个字节。
+对此应用正向 AES SBox 操作和部分正向 MixColumn，然后与 `rs1` 进行异或。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (AES32ESMI (bs,rs2,rs1,rd)) = {
+  let shamt   : bits( 5) = bs @ 0b000; /* shamt = bs*8 */
+  let si      : bits( 8) = (X(rs2)[31..0] >> shamt)[7..0]; /* SBox 输入 */
+  let so      : bits( 8) = aes_sbox_fwd(si);
+  let mixed   : bits(32) = aes_mixcolumn_byte_fwd(so);
+  let result  : bits(32) = X(rs1)[31..0] ^ rol32(mixed, unsigned(shamt));
+  X(rd) = EXTS(result); RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zkne>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes64ds, reftext="AES 最终轮解密 (RV64)"]
+==== aes64ds
+
+概要::
+RV64 的 AES 最终轮解密指令。
+
+助记符::
+aes64ds rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x1d},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+使用两个 64 位源寄存器表示整个 AES 状态，并生成下一轮输出的一半，应用逆 ShiftRows 和 SubBytes 步骤。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+以下代码片段显示了 AES 块解密的最终轮。
+`t0` 和 `t1` 保存当前轮状态。
+`t2` 和 `t3` 保存下一轮状态。
+
+  aes64ds t2, t0, t1
+  aes64ds t3, t1, t0
+
+注意第二条指令的寄存器顺序是反向的。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (AES64DS(rs2, rs1, rd)) = {
+  let sr : bits(64) = aes_rv64_shiftrows_inv(X(rs2)[63..0], X(rs1)[63..0]);
+  let wd : bits(64) = sr[63..0];
+  X(rd) = aes_apply_inv_sbox_to_each_byte(wd);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknd>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes64dsm, reftext="AES 中间轮解密 (RV64)"]
+==== aes64dsm
+
+概要::
+RV64 的 AES 中间轮解密指令。
+
+助记符::
+aes64dsm rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x1f},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+使用两个 64 位源寄存器表示整个 AES 状态，并生成下一轮输出的一半，应用逆 ShiftRows、SubBytes 和 MixColumns 步骤。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+以下代码片段显示了 AES 块解密的一个中间轮。
+`t0` 和 `t1` 保存当前轮状态。
+`t2` 和 `t3` 保存下一轮状态。
+
+  aes64dsm t2, t0, t1
+  aes64dsm t3, t1, t0
+
+注意第二条指令的寄存器顺序是反向的。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (AES64DSM(rs2, rs1, rd)) = {
+  let sr : bits(64) = aes_rv64_shiftrows_inv(X(rs2)[63..0], X(rs1)[63..0]);
+  let wd : bits(64) = sr[63..0];
+  let sb : bits(64) = aes_apply_inv_sbox_to_each_byte(wd);
+  X(rd)  = aes_mixcolumn_inv(sb[63..32]) @ aes_mixcolumn_inv(sb[31..0]);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknd>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes64es, reftext="AES 最终轮加密指令 (RV64)"]
+==== aes64es
+
+概要::
+RV64 的 AES 最终轮加密指令。
+
+助记符::
+aes64es rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x19},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+使用两个 64 位源寄存器表示整个 AES 状态，并生成下一轮输出的一半，应用 ShiftRows 和 SubBytes 步骤。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+以下代码片段显示了 AES 块加密的最终轮。
+`t0` 和 `t1` 保存当前轮状态。
+`t2` 和 `t3` 保存下一轮状态。
+
+  aes64es t2, t0, t1
+  aes64es t3, t1, t0
+
+注意第二条指令的寄存器顺序是反向的。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (AES64ES(rs2, rs1, rd)) = {
+  let sr : bits(64) = aes_rv64_shiftrows_fwd(X(rs2)[63..0], X(rs1)[63..0]);
+  let wd : bits(64) = sr[63..0];
+  X(rd) = aes_apply_fwd_sbox_to_each_byte(wd);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zkne>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes64esm, reftext="AES 中间轮加密指令 (RV64)"]
+==== aes64esm
+
+概要::
+RV64 的 AES 中间轮加密指令。
+
+助记符::
+aes64esm rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x1b},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+使用两个 64 位源寄存器表示整个 AES 状态，并生成下一轮输出的一半，应用 ShiftRows、SubBytes 和 MixColumns 步骤。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+以下代码片段显示了 AES 块加密的一个中间轮。
+`t0` 和 `t1` 保存当前轮状态。
+`t2` 和 `t3` 保存下一轮状态。
+
+  aes64esm t2, t0, t1
+  aes64esm t3, t1, t0
+
+注意第二条指令的寄存器顺序是反向的。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (AES64ESM(rs2, rs1, rd)) = {
+  let sr : bits(64) = aes_rv64_shiftrows_fwd(X(rs2)[63..0], X(rs1)[63..0]);
+  let wd : bits(64) = sr[63..0];
+  let sb : bits(64) = aes_apply_fwd_sbox_to_each_byte(wd);
+  X(rd)  =  aes_mixcolumn_fwd(sb[63..32]) @ aes_mixcolumn_fwd(sb[31..0]);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zkne>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes64im, reftext="AES 解密密钥调度 MixColumns (RV64)"]
+==== aes64im
+
+概要::
+此指令加速 AES 块密码的逆 MixColumns 步骤，用于辅助创建解密密钥调度。
+
+助记符::
+aes64im rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x0},
+{bits: 5, name: 0x18},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令将逆 MixColumns 转换应用于打包在单个 64 位寄存器中的状态数组的两列。
+它用于根据 cite:[nist:fips:197]（第 23 页，第 5.3.5 节）中的等效逆密码构造创建逆密码密钥调度。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (AES64IM(rs1, rd)) = {
+  let w0 : bits(32) = aes_mixcolumn_inv(X(rs1)[31.. 0]);
+  let w1 : bits(32) = aes_mixcolumn_inv(X(rs1)[63..32]);
+  X(rd)  = w1 @ w0;
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknd>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes64ks1i, reftext="AES 密钥调度指令 1 (RV64)"]
+==== aes64ks1i
+
+概要::
+此指令实现 AES 块密码密钥调度中涉及 SBox 操作的部分。
+
+助记符::
+aes64ks1i rd, rs1, rnum
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 4, name: 'rnum'},
+{bits: 1, name: 0x1},
+{bits: 5, name: 0x18},
+{bits: 2, name: 0},
+]}
+....
+
+描述::
+此指令实现 AES 块密码密钥调度的旋转、SubBytes 和轮常数加法步骤。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+注意，`rnum` 必须在 `0x0..0xA` 范围内。
+值 `0xB..0xF` 保留。
+
+操作::
+[source,sail]
+--
+function clause execute (AES64KS1I(rnum, rs1, rd)) = {
+  if(unsigned(rnum) > 10) then {
+    handle_illegal();  RETIRE_SUCCESS
+  } else {
+    let tmp1 : bits(32) = X(rs1)[63..32];
+    let rc   : bits(32) = aes_decode_rcon(rnum); /* 轮数 -> 轮常数 */
+    let tmp2 : bits(32) = if (rnum ==0xA) then tmp1 else ror32(tmp1, 8);
+    let tmp3 : bits(32) = aes_subword_fwd(tmp2);
+    let result : bits(64) = (tmp3 ^ rc) @ (tmp3 ^ rc);
+    X(rd) = EXTZ(result);
+    RETIRE_SUCCESS
+  }
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zkne>> (RV64)
+| v1.0.0
+| 冻结
+| <<zknd>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-aes64ks2, reftext="AES 密钥调度指令 2 (RV64)"]
+==== aes64ks2
+
+概要::
+此指令实现 AES 块密码密钥调度的部分操作。
+
+助记符::
+aes64ks2 rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x1f},
+{bits: 2, name: 0x1},
+]}
+....
+
+描述::
+此指令实现 AES 块密码密钥调度中密钥字的附加异或操作。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (AES64KS2(rs2, rs1, rd)) = {
+  let w0 : bits(32) = X(rs1)[63..32] ^ X(rs2)[31..0];
+  let w1 : bits(32) = X(rs1)[63..32] ^ X(rs2)[31..0] ^ X(rs2)[63..32];
+  X(rd)  = w1 @ w0;
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zkne>> (RV64)
+| v1.0.0
+| 冻结
+| <<zknd>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-andn,reftext="与反操作数的与"]
+==== andn
+
+概要::
+与反操作数的与
+
+助记符::
+andn _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x33, attr: ['OP'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x7, attr: ['ANDN']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x20, attr: ['ANDN'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 和 _rs2_ 的按位反进行按位与操作。
+
+操作::
+[source,sail]
+--
+X(rd) = X(rs1) & ~X(rs2);
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-brev8,reftext="字节内位反转"]
+==== brev8
+
+概要::
+反转源寄存器中每个字节的位顺序。
+
+助记符::
+brev8, _rd_, _rs_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x13, attr: ['OP-IMM'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x65 },
+    { bits:  5, name: 'rs' },
+    { bits:  12, name: 0x687 },
+]}
+....
+
+描述::
+此指令反转寄存器中每个字节的位顺序。
+
+[NOTE]
+====
+此指令是最初作为 RISC-V 位操作扩展 (grevi) 的一部分提出的更通用指令的特定编码。最终，可能会标准化更通用的指令。在此之前，仅包括此类最常见的实例。
+====
+
+操作::
+[source,sail]
+--
+result : xlenbits = EXTZ(0b0);
+foreach (i from 0 to sizeof(xlen) by 8) {
+result[i+7..i] = reverse_bits_in_byte(X(rs1)[i+7..i]);
+};
+X(rd) = result;
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-clmul,reftext="无进位乘法（低位部分）"]
+==== clmul
+
+概要::
+无进位乘法（低位部分）
+
+助记符::
+clmul _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x33, attr: ['OP'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x1, attr: ['CLMUL'] },
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x5, attr: ['MINMAX/CLMUL'] },
+]}
+....
+
+描述::
+clmul 生成 2·XLEN 无进位乘积的低位部分。
+
+操作::
+[source,sail]
+--
+let rs1_val = X(rs1);
+let rs2_val = X(rs2);
+let output : xlenbits = 0;
+
+foreach (i from 0 to (xlen - 1) by 1) {
+   output = if   ((rs2_val >> i) & 1)
+            then output ^ (rs1_val << i);
+            else output;
+}
+
+X[rd] = output
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbc (<<#zbc>>)
+|1.0.0
+|冻结
+
+|Zbkc (<<#zbkc>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-clmulh,reftext="无进位乘法（高位部分）"]
+==== clmulh
+
+概要::
+无进位乘法（高位部分）
+
+助记符::
+clmulh _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x33, attr: ['OP'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x3, attr: ['CLMULH'] },
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x5, attr: ['MINMAX/CLMUL'] },
+]}
+....
+
+描述::
+clmulh 生成 2·XLEN 无进位乘积的高位部分。
+
+操作::
+[source,sail]
+--
+let rs1_val = X(rs1);
+let rs2_val = X(rs2);
+let output : xlenbits = 0;
+
+foreach (i from 1 to xlen by 1) {
+   output = if   ((rs2_val >> i) & 1)
+            then output ^ (rs1_val >> (xlen - i));
+            else output;
+}
+
+X[rd] = output
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbc (<<#zbc>>)
+|1.0.0
+|冻结
+
+|Zbkc (<<#zbkc>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-orn,reftext="或反操作数的或"]
+==== orn
+
+概要::
+或反操作数的或
+
+助记符::
+orn _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x33, attr: ['OP'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x6, attr: ['ORN']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x20, attr: ['ORN'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 和 _rs2_ 的按位反进行按位或操作。
+
+操作::
+[source,sail]
+--
+X(rd) = X(rs1) | ~X(rs2);
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-pack,reftext="打包寄存器的低半部分"]
+==== pack
+
+概要::
+将 _rs1_ 和 _rs2_ 的低半部分打包到 _rd_ 中。
+
+助记符::
+pack _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    {bits:  7, name: 0x33, attr: ['OP'] },
+    {bits: 5, name: 'rd'},
+    {bits: 3, name: 0x4, attr:['PACK']},
+    {bits: 5, name: 'rs1'},
+    {bits: 5, name: 'rs2'},
+    {bits: 7, name: 0x4, attr:['PACK']},
+]}
+....
+
+描述::
+pack 指令将 _rs1_ 和 _rs2_ 的 XLEN/2 位低半部分打包到 _rd_ 中，_rs1_ 在低半部分，_rs2_ 在高半部分。
+
+操作::
+[source,sail]
+--
+let lo_half : bits(xlen/2) = X(rs1)[xlen/2-1..0];
+let hi_half : bits(xlen/2) = X(rs2)[xlen/2-1..0];
+X(rd) = EXTZ(hi_half @ lo_half);
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-packh,reftext="打包寄存器的低字节"]
+==== packh
+
+概要::
+将 _rs1_ 和 _rs2_ 的低字节打包到 _rd_ 中。
+
+助记符::
+packh _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    {bits:  7, name: 0x33, attr: ['OP'] },
+    {bits: 5, name: 'rd'},
+    {bits: 3, name: 0x7, attr: ['PACKH']},
+    {bits: 5, name: 'rs1'},
+    {bits: 5, name: 'rs2'},
+    {bits: 7, name: 0x4, attr: ['PACKH']},
+]}
+....
+
+描述::
+packh 指令将 _rs1_ 和 _rs2_ 的最低有效字节打包到 _rd_ 的 16 个最低有效位中，零扩展 _rd_ 的其余部分。
+
+操作::
+[source,sail]
+--
+let lo_half : bits(8) = X(rs1)[7..0];
+let hi_half : bits(8) = X(rs2)[7..0];
+X(rd) = EXTZ(hi_half @ lo_half);
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-packw,reftext="打包寄存器的低 16 位（RV64）"]
+==== packw
+
+概要::
+在 RV64 上将 _rs1_ 和 _rs2_ 的低 16 位打包到 _rd_ 中。
+
+助记符::
+packw _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 2, name: 0x3},
+{bits: 5, name: 0xe},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x4},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 7, name: 0x4},
+]}
+....
+
+描述::
+此指令将 _rs1_ 和 _rs2_ 的低 16 位打包到 _rd_ 的 32 个最低有效位中，将 32 位结果符号扩展到 _rd_ 的其余部分。
+此指令仅存在于基于 RV64 的系统上。
+
+操作::
+[source,sail]
+--
+let lo_half : bits(16) = X(rs1)[15..0];
+let hi_half : bits(16) = X(rs2)[15..0];
+X(rd) = EXTS(hi_half @ lo_half);
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-rev8,reftext="字节反转寄存器"]
+==== rev8
+
+概要::
+字节反转寄存器
+
+助记符::
+rev8 _rd_, _rs_
+
+编码 (RV32)::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x13, attr: ['OP-IMM'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x5 },
+    { bits:  5, name: 'rs' },
+    { bits: 12, name: 0x698 }
+]}
+....
+
+编码 (RV64)::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x13, attr: ['OP-IMM'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x5 },
+    { bits:  5, name: 'rs' },
+    { bits: 12, name: 0x6b8 }
+]}
+....
+
+描述::
+此指令反转 _rs_ 中字节的顺序。
+
+操作::
+[source,sail]
+--
+let input = X(rs);
+let output : xlenbits = 0;
+let j = xlen - 1;
+
+foreach (i from 0 to (xlen - 8) by 8) {
+   output[i..(i + 7)] = input[(j - 7)..j];
+   j = j - 8;
+}
+
+X[rd] = output
+--
+
+.注意
+[NOTE, caption="A" ]
+===============================================================
+*rev8* 助记符在 RV32 和 RV64 中对应不同的指令编码。
+===============================================================
+
+.软件提示
+[NOTE, caption="SH" ]
+===============================================================
+字节反转操作仅适用于整个寄存器宽度。要模拟字大小和半字大小的字节反转，请执行 `rev8 rd,rs`，然后执行 `srai rd,rd,K`，其中 K 分别为 XLEN-32 和 XLEN-16。
+===============================================================
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-rol,reftext="左旋转（寄存器）"]
+==== rol
+
+概要::
+左旋转（寄存器）
+
+助记符::
+rol _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x33, attr: ['OP'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x1, attr: ['ROL']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x30, attr: ['ROL'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 进行左旋转，旋转量由 _rs2_ 的最低 log2(XLEN) 位决定。
+
+操作::
+[source,sail]
+--
+let shamt = if   xlen == 32
+            then X(rs2)[4..0]
+            else X(rs2)[5..0];
+let result = (X(rs1) << shamt) | (X(rs1) >> (xlen - shamt));
+
+X(rd) = result;
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-rolw,reftext="左旋转字（寄存器）"]
+==== rolw
+
+概要::
+左旋转字（寄存器）
+
+助记符::
+rolw _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x3b, attr: ['OP-32'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x1, attr: ['ROLW']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x30, attr: ['ROLW'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 的最低有效字进行左旋转，旋转量由 _rs2_ 的最低 5 位决定。
+结果字值通过将第 31 位复制到所有更高位来进行符号扩展。
+
+操作::
+[source,sail]
+--
+let rs1 = EXTZ(X(rs1)[31..0])
+let shamt = X(rs2)[4..0];
+let result = (rs1 << shamt) | (rs1 >> (32 - shamt));
+X(rd) = EXTS(result[31..0]);
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-ror, reftext="右旋转（寄存器）"]
+==== ror
+
+概要::
+右旋转
+
+助记符::
+ror _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x33, attr: ['OP'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x5, attr: ['ROR']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x30, attr: ['ROR'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 进行右旋转，旋转量由 _rs2_ 的最低 log2(XLEN) 位决定。
+
+操作::
+[source,sail]
+--
+let shamt = if   xlen == 32
+            then X(rs2)[4..0]
+            else X(rs2)[5..0];
+let result = (X(rs1) >> shamt) | (X(rs1) << (xlen - shamt));
+
+X(rd) = result;
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-rori,reftext="右旋转（立即数）"]
+==== rori
+
+概要::
+右旋转（立即数）
+
+助记符::
+rori _rd_, _rs1_, _shamt_
+
+编码 (RV32)::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x13, attr: ['OP-IMM'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x5, attr: ['RORI']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'shamt' },
+    { bits:  7, name: 0x30, attr: ['RORI'] },
+]}
+....
+
+编码 (RV64)::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x13, attr: ['OP-IMM'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x5, attr: ['RORI']},
+    { bits:  5, name: 'rs1' },
+    { bits:  6, name: 'shamt' },
+    { bits:  6, name: 0x18, attr: ['RORI'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 进行右旋转，旋转量由 _shamt_ 的最低 log2(XLEN) 位决定。
+对于 RV32，对应 shamt[5]=1 的编码保留。
+
+操作::
+[source,sail]
+--
+let shamt = if   xlen == 32
+            then shamt[4..0]
+            else shamt[5..0];
+let result = (X(rs1) >> shamt) | (X(rs1) << (xlen - shamt));
+
+X(rd) = result;
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-roriw,reftext="右旋转字（立即数）"]
+==== roriw
+
+概要::
+按立即数右旋转字
+
+助记符::
+roriw _rd_, _rs1_, _shamt_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x1b, attr: ['OP-IMM-32'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x5, attr: ['RORIW']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'shamt' },
+    { bits:  7, name: 0x30, attr: ['RORIW'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 的最低有效字进行右旋转，旋转量由 _shamt_ 的最低 log2(XLEN) 位决定。
+结果字值通过将第 31 位复制到所有更高位来进行符号扩展。
+
+操作::
+[source,sail]
+--
+let rs1_data = EXTZ(X(rs1)[31..0];
+let result = (rs1_data >> shamt) | (rs1_data << (32 - shamt));
+X(rd) = EXTS(result[31..0]);
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-rorw,reftext="右旋转字（寄存器）"]
+==== rorw
+
+概要::
+右旋转字（寄存器）
+
+助记符::
+rorw _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x3b, attr: ['OP-32'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x5, attr: ['RORW']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x30, attr: ['RORW'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 的最低有效字进行右旋转，旋转量由 _rs2_ 的最低 5 位决定。
+结果字值通过将第 31 位复制到所有更高位来进行符号扩展。
+
+操作::
+[source,sail]
+--
+let rs1 = EXTZ(X(rs1)[31..0])
+let shamt = X(rs2)[4..0];
+let result = (rs1 >> shamt) | (rs1 << (32 - shamt));
+X(rd) = EXTS(result);
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-sha256sig0, reftext="SHA2-256 Sigma0 指令"]
+==== sha256sig0
+
+概要::
+实现 SHA2-256 哈希函数中使用的 Sigma0 转换函数 cite:[nist:fips:180:4]（第 4.1.2 节）。
+
+助记符::
+sha256sig0 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x2},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV32 和 RV64 基础架构。
+对于 RV32，操作整个 `XLEN` 源寄存器。
+对于 RV64，操作源寄存器的低 `32` 位，并将结果符号扩展到 `XLEN` 位。
+尽管以 SHA2-256 命名，但该指令适用于 cite:[nist:fips:180:4] 中描述的 SHA2-224 和 SHA2-256 参数化。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SHA256SIG0(rs1,rd)) = {
+  let inb    : bits(32) = X(rs1)[31..0];
+  let result : bits(32) = ror32(inb,  7) ^ ror32(inb, 18) ^ (inb >>  3);
+  X(rd)      = EXTS(result);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>>
+| v1.0.0
+| 冻结
+| <<zkn>>
+| v1.0.0
+| 冻结
+| <<zk>>
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha256sig1, reftext="SHA2-256 Sigma1 指令"]
+==== sha256sig1
+
+概要::
+实现 SHA2-256 哈希函数中使用的 Sigma1 转换函数 cite:[nist:fips:180:4]（第 4.1.2 节）。
+
+助记符::
+sha256sig1 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x3},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV32 和 RV64 基础架构。
+对于 RV32，操作整个 `XLEN` 源寄存器。
+对于 RV64，操作源寄存器的低 `32` 位，并将结果符号扩展到 `XLEN` 位。
+尽管以 SHA2-256 命名，但该指令适用于 cite:[nist:fips:180:4] 中描述的 SHA2-224 和 SHA2-256 参数化。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SHA256SIG1(rs1,rd)) = {
+  let inb    : bits(32) = X(rs1)[31..0];
+  let result : bits(32) = ror32(inb, 17) ^ ror32(inb, 19) ^ (inb >> 10);
+  X(rd)      = EXTS(result);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>>
+| v1.0.0
+| 冻结
+| <<zkn>>
+| v1.0.0
+| 冻结
+| <<zk>>
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha256sum0, reftext="SHA2-256 Sum0 指令"]
+==== sha256sum0
+
+概要::
+实现 SHA2-256 哈希函数中使用的 Sum0 转换函数 cite:[nist:fips:180:4]（第 4.1.2 节）。
+
+助记符::
+sha256sum0 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x0},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV32 和 RV64 基础架构。
+对于 RV32，操作整个 `XLEN` 源寄存器。
+对于 RV64，操作源寄存器的低 `32` 位，并将结果符号扩展到 `XLEN` 位。
+尽管以 SHA2-256 命名，但该指令适用于 cite:[nist:fips:180:4] 中描述的 SHA2-224 和 SHA2-256 参数化。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SHA256SUM0(rs1,rd)) = {
+  let inb    : bits(32) = X(rs1)[31..0];
+  let result : bits(32) = ror32(inb,  2) ^ ror32(inb, 13) ^ ror32(inb, 22);
+  X(rd)      = EXTS(result);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>>
+| v1.0.0
+| 冻结
+| <<zkn>>
+| v1.0.0
+| 冻结
+| <<zk>>
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha256sum1, reftext="SHA2-256 Sum1 指令"]
+==== sha256sum1
+
+概要::
+实现 SHA2-256 哈希函数中使用的 Sum1 转换函数 cite:[nist:fips:180:4]（第 4.1.2 节）。
+
+助记符::
+sha256sum1 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x1},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV32 和 RV64 基础架构。
+对于 RV32，操作整个 `XLEN` 源寄存器。
+对于 RV64，操作源寄存器的低 `32` 位，并将结果符号扩展到 `XLEN` 位。
+尽管以 SHA2-256 命名，但该指令适用于 cite:[nist:fips:180:4] 中描述的 SHA2-224 和 SHA2-256 参数化。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SHA256SUM1(rs1,rd)) = {
+  let inb    : bits(32) = X(rs1)[31..0];
+  let result : bits(32) = ror32(inb,  6) ^ ror32(inb, 11) ^ ror32(inb, 25);
+  X(rd)      = EXTS(result);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>>
+| v1.0.0
+| 冻结
+| <<zkn>>
+| v1.0.0
+| 冻结
+| <<zk>>
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sig0h, reftext="SHA2-512 Sigma0 高位 (RV32)"]
+==== sha512sig0h
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sigma0 转换的 _高位_，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sig0h rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0xe},
+{bits: 2, name: 0x1},
+]}
+....
+
+描述::
+此指令仅在 RV32 上实现。
+用于与 <<insns-sha512sig0l,`sha512sig0l`>> 指令一起计算 SHA2-512 哈希函数的 Sigma0 转换。
+转换是一个 64 位到 64 位的函数，因此输入和输出分别由两个 32 位寄存器表示。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+[TIP]
+.给软件开发人员的注意事项
+====
+可以使用以下指令序列在 RV32 上计算 SHA2-512 的整个 Sigma0 转换：
+
+ sha512sig0l    t0, a0, a1
+ sha512sig0h    t1, a1, a0
+
+====
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SIG0H(rs2, rs1, rd)) = {
+  X(rd) = EXTS((X(rs1) >>  1) ^ (X(rs1) >>  7) ^ (X(rs1) >>  8) ^
+               (X(rs2) << 31)                  ^ (X(rs2) << 24) );
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sig0l, reftext="SHA2-512 Sigma0 低位 (RV32)"]
+==== sha512sig0l
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sigma0 转换的 _低位_，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sig0l rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0xa},
+{bits: 2, name: 0x1},
+]}
+....
+
+描述::
+此指令仅在 RV32 上实现。
+用于与 <<insns-sha512sig0h,`sha512sig0h`>> 指令一起计算 SHA2-512 哈希函数的 Sigma0 转换。
+转换是一个 64 位到 64 位的函数，因此输入和输出分别由两个 32 位寄存器表示。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+[TIP]
+.给软件开发人员的注意事项
+====
+可以使用以下指令序列在 RV32 上计算 SHA2-512 的整个 Sigma0 转换：
+
+ sha512sig0l    t0, a0, a1
+ sha512sig0h    t1, a1, a0
+
+====
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SIG0L(rs2, rs1, rd)) = {
+  X(rd) = EXTS((X(rs1) >>  1) ^ (X(rs1) >>  7) ^ (X(rs1) >>  8) ^
+               (X(rs2) << 31) ^ (X(rs2) << 25) ^ (X(rs2) << 24) );
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sig1h, reftext="SHA2-512 Sigma1 高位 (RV32)"]
+==== sha512sig1h
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sigma1 转换的 _高位_，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sig1h rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0xf},
+{bits: 2, name: 0x1},
+]}
+....
+
+描述::
+此指令仅在 RV32 上实现。
+用于与 <<insns-sha512sig1l,`sha512sig1l`>> 指令一起计算 SHA2-512 哈希函数的 Sigma1 转换。
+转换是一个 64 位到 64 位的函数，因此输入和输出分别由两个 32 位寄存器表示。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+[TIP]
+.给软件开发人员的注意事项
+====
+可以使用以下指令序列在 RV32 上计算 SHA2-512 的整个 Sigma1 转换：
+
+ sha512sig1l    t0, a0, a1
+ sha512sig1h    t1, a1, a0
+
+====
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SIG1H(rs2, rs1, rd)) = {
+  X(rd) = EXTS((X(rs1) <<  3) ^ (X(rs1) >>  6) ^ (X(rs1) >> 19) ^
+               (X(rs2) >> 29)                  ^ (X(rs2) << 13) );
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sig1l, reftext="SHA2-512 Sigma1 低位 (RV32)"]
+==== sha512sig1l
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sigma1 转换的 _低位_，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sig1l rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0xb},
+{bits: 2, name: 0x1},
+]}
+....
+
+描述::
+此指令仅在 RV32 上实现。
+用于与 <<insns-sha512sig1h,`sha512sig1h`>> 指令一起计算 SHA2-512 哈希函数的 Sigma1 转换。
+转换是一个 64 位到 64 位的函数，因此输入和输出分别由两个 32 位寄存器表示。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+[TIP]
+.给软件开发人员的注意事项
+====
+可以使用以下指令序列在 RV32 上计算 SHA2-512 的整个 Sigma1 转换：
+
+ sha512sig1l    t0, a0, a1
+ sha512sig1h    t1, a1, a0
+
+====
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SIG1L(rs2, rs1, rd)) = {
+  X(rd) = EXTS((X(rs1) <<  3) ^ (X(rs1) >>  6) ^ (X(rs1) >> 19) ^
+               (X(rs2) >> 29) ^ (X(rs2) << 26) ^ (X(rs2) << 13) );
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sum0r, reftext="SHA2-512 Sum0 (RV32)"]
+==== sha512sum0r
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sum0 转换，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sum0r rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x1},
+]}
+....
+
+描述::
+此指令仅在 RV32 上实现。
+用于计算 SHA2-512 哈希函数的 Sum0 转换。
+转换是一个 64 位到 64 位的函数，因此输入和输出分别由两个 32 位寄存器表示。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+[TIP]
+.给软件开发人员的注意事项
+====
+可以使用以下指令序列在 RV32 上计算 SHA2-512 的整个 Sum0 转换：
+
+ sha512sum0r    t0, a0, a1
+ sha512sum0r    t1, a1, a0
+
+注意源寄存器顺序是反向的。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SUM0R(rs2, rs1, rd)) = {
+  X(rd) = EXTS((X(rs1) << 25) ^ (X(rs1) << 30) ^ (X(rs1) >> 28) ^
+               (X(rs2) >>  7) ^ (X(rs2) >>  2) ^ (X(rs2) <<  4) );
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sum1r, reftext="SHA2-512 Sum1 (RV32)"]
+==== sha512sum1r
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sum1 转换，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sum1r rd, rs1, rs2
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x9},
+{bits: 2, name: 0x1},
+]}
+....
+
+描述::
+此指令仅在 RV32 上实现。
+用于计算 SHA2-512 哈希函数的 Sum1 转换。
+转换是一个 64 位到 64 位的函数，因此输入和输出分别由两个 32 位寄存器表示。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+[TIP]
+.给软件开发人员的注意事项
+====
+可以使用以下指令序列在 RV32 上计算 SHA2-512 的整个 Sum1 转换：
+
+ sha512sum1r    t0, a0, a1
+ sha512sum1r    t1, a1, a0
+
+注意源寄存器顺序是反向的。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SUM1R(rs2, rs1, rd)) = {
+  X(rd) = EXTS((X(rs1) << 23) ^ (X(rs1) >> 14) ^ (X(rs1) >> 18) ^
+               (X(rs2) >>  9) ^ (X(rs2) << 18) ^ (X(rs2) << 14) );
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV32)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV32)
+| v1.0.0
+| 冻结
+| <<zk>> (RV32)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sig0, reftext="SHA2-512 Sigma0 指令 (RV64)"]
+==== sha512sig0
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sigma0 转换函数，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sig0 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x6},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV64 基础架构。
+它实现了 SHA2-512 哈希函数的 Sigma0 转换。
+cite:[nist:fips:180:4]。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SIG0(rs1, rd)) = {
+  X(rd) = ror64(X(rs1),  1) ^ ror64(X(rs1),  8) ^ (X(rs1) >> 7);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sig1, reftext="SHA2-512 Sigma1 指令 (RV64)"]
+==== sha512sig1
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sigma1 转换函数，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sig1 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x7},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV64 基础架构。
+它实现了 SHA2-512 哈希函数的 Sigma1 转换。
+cite:[nist:fips:180:4]。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SIG1(rs1, rd)) = {
+  X(rd) = ror64(X(rs1), 19) ^ ror64(X(rs1), 61) ^ (X(rs1) >> 6);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sum0, reftext="SHA2-512 Sum0 指令 (RV64)"]
+==== sha512sum0
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sum0 转换函数，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sum0 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x4},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV64 基础架构。
+它实现了 SHA2-512 哈希函数的 Sum0 转换。
+cite:[nist:fips:180:4]。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SUM0(rs1, rd)) = {
+  X(rd) = ror64(X(rs1), 28) ^ ror64(X(rs1), 34) ^ ror64(X(rs1) ,39);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sha512sum1, reftext="SHA2-512 Sum1 指令 (RV64)"]
+==== sha512sum1
+
+概要::
+实现 SHA2-512 哈希函数中使用的 Sum1 转换函数，cite:[nist:fips:180:4]（第 4.1.3 节）。
+
+助记符::
+sha512sum1 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x5},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV64 基础架构。
+它实现了 SHA2-512 哈希函数的 Sum1 转换。
+cite:[nist:fips:180:4]。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SHA512SUM1(rs1, rd)) = {
+  X(rd) = ror64(X(rs1), 14) ^ ror64(X(rs1), 18) ^ ror64(X(rs1) ,41);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zknh>> (RV64)
+| v1.0.0
+| 冻结
+| <<zkn>> (RV64)
+| v1.0.0
+| 冻结
+| <<zk>> (RV64)
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sm3p0, reftext="SM3 P0 转换"]
+==== sm3p0
+
+概要::
+实现 SM3 哈希函数中使用的 _P0_ 转换函数，cite:[gbt:sm3,iso:sm3]。
+
+助记符::
+sm3p0 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x8},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV32 和 RV64 基础架构。
+它实现了 SM3 哈希函数的 _P0_ 转换，cite:[gbt:sm3,iso:sm3]。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+.支持材料
+[NOTE]
+====
+此指令基于 cite:[MJS:LWSHA:20] 中的工作。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (SM3P0(rs1, rd)) = {
+  let r1     : bits(32) = X(rs1)[31..0];
+  let result : bits(32) =  r1 ^ rol32(r1,  9) ^ rol32(r1, 17);
+  X(rd) = EXTS(result);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zksh>>
+| v1.0.0
+| 冻结
+| <<zks>>
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sm3p1, reftext="SM3 P1 转换"]
+==== sm3p1
+
+概要::
+实现 SM3 哈希函数中使用的 _P1_ 转换函数，cite:[gbt:sm3,iso:sm3]。
+
+助记符::
+sm3p1 rd, rs1
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x13},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x9},
+{bits: 5, name: 0x8},
+{bits: 2, name: 0x0},
+]}
+....
+
+描述::
+此指令支持 RV32 和 RV64 基础架构。
+它实现了 SM3 哈希函数的 _P1_ 转换，cite:[gbt:sm3,iso:sm3]。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+.支持材料
+[NOTE]
+====
+此指令基于 cite:[MJS:LWSHA:20] 中的工作。
+====
+
+操作::
+[source,sail]
+--
+function clause execute (SM3P1(rs1, rd)) = {
+  let r1     : bits(32) = X(rs1)[31..0];
+  let result : bits(32) =  r1 ^ rol32(r1, 15) ^ rol32(r1, 23);
+  X(rd) = EXTS(result);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zksh>>
+| v1.0.0
+| 冻结
+| <<zks>>
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sm4ed, reftext="SM4 加密/解密指令"]
+==== sm4ed
+
+概要::
+加速 SM4 块密码的块加密/解密操作，cite:[gbt:sm4, iso:sm4]。
+
+助记符::
+sm4ed rd, rs1, rs2, bs
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x18},
+{bits: 2, name: 'bs'},
+]}
+....
+
+描述::
+在硬件中实现 T 表方法以加速 SM4 轮函数。
+根据 `bs` 从 `rs2` 中提取一个字节，对其应用 SBox 和线性层转换，然后将结果与 `rs1` 进行异或，并写回 `rd`。
+此指令存在于 RV32 和 RV64 基础架构上。
+在 RV64 上，32 位结果符号扩展到 XLEN 位。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SM4ED (bs,rs2,rs1,rd)) = {
+  let shamt : bits(5)  = bs @ 0b000; /* shamt = bs*8 */
+  let sb_in : bits(8)  = (X(rs2)[31..0] >> shamt)[7..0];
+  let x     : bits(32) = 0x000000 @ sm4_sbox(sb_in);
+  let y     : bits(32) = x ^ (x               <<  8) ^ ( x               <<  2) ^
+                             (x               << 18) ^ ((x & 0x0000003F) << 26) ^
+                             ((x & 0x000000C0) << 10);
+  let z     : bits(32) = rol32(y, unsigned(shamt));
+  let result: bits(32) = z ^ X(rs1)[31..0];
+  X(rd)                = EXTS(result);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zksed>>
+| v1.0.0
+| 冻结
+| <<zks>>
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-sm4ks, reftext="SM4 密钥调度指令"]
+==== sm4ks
+
+概要::
+加速 SM4 块密码的密钥调度操作，cite:[gbt:sm4, iso:sm4]。
+
+助记符::
+sm4ks rd, rs1, rs2, bs
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x33},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x0},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 'rs2'},
+{bits: 5, name: 0x1a},
+{bits: 2, name: 'bs'},
+]}
+....
+
+描述::
+在硬件中实现 T 表方法以加速 SM4 密钥调度。
+根据 `bs` 从 `rs2` 中提取一个字节，对其应用 SBox 和线性层转换，然后将结果与 `rs1` 进行异或，并写回 `rd`。
+此指令存在于 RV32 和 RV64 基础架构上。
+在 RV64 上，32 位结果符号扩展到 XLEN 位。
+此指令必须 _始终_ 实现，使其执行延迟不依赖于操作的数据。
+
+操作::
+[source,sail]
+--
+function clause execute (SM4KS (bs,rs2,rs1,rd)) = {
+  let shamt : bits(5)  = (bs @ 0b000); /* shamt = bs*8 */
+  let sb_in : bits(8)  = (X(rs2)[31..0] >> shamt)[7..0];
+  let x     : bits(32) = 0x000000 @ sm4_sbox(sb_in);
+  let y     : bits(32) = x ^ ((x & 0x00000007) << 29) ^ ((x & 0x000000FE) <<  7) ^
+                             ((x & 0x00000001) << 23) ^ ((x & 0x000000F8) << 13) ;
+  let z     : bits(32) = rol32(y, unsigned(shamt));
+  let result: bits(32) = z ^ X(rs1)[31..0];
+  X(rd) = EXTS(result);
+  RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+| <<zksed>>
+| v1.0.0
+| 冻结
+| <<zks>>
+| v1.0.0
+| 冻结
+|===
+
+<<<
+
+[#insns-unzip,reftext="位反交错"]
+==== unzip
+
+概要::
+实现 zip 指令的逆操作。
+
+助记符::
+unzip _rd_, _rs_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 2, name: 0x3},
+{bits: 5, name: 0x4},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x5},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x1f},
+{bits: 7, name: 0x4},
+]}
+....
+
+描述::
+此指令将源字的高低半部分的位收集到目标字的奇偶位位置。
+它是 <<insns-zip,zip>> 指令的逆操作。
+此指令仅在 RV32 上可用。
+
+操作::
+[source,sail]
+--
+foreach (i from 0 to xlen/2-1) {
+  X(rd)[i] = X(rs1)[2*i]
+  X(rd)[i+xlen/2] = X(rs1)[2*i+1]
+}
+--
+
+.软件提示
+[NOTE, caption="SH" ]
+===============================================================
+此指令对于在 32 位架构上实现 SHA3 密码哈希函数非常有用，因为它直接实现了用于加速 64 位旋转的位交错操作。
+===============================================================
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbkb (<<#zbkb>>) (RV32)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-xnor,reftext="异或非"]
+==== xnor
+
+概要::
+异或非
+
+助记符::
+xnor _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  7, name: 0x33, attr: ['OP'] },
+    { bits:  5, name: 'rd' },
+    { bits:  3, name: 0x4, attr: ['XNOR']},
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x20, attr: ['XNOR'] },
+]}
+....
+
+描述::
+此指令对 _rs1_ 和 _rs2_ 执行按位异或非操作。
+
+操作::
+[source,sail]
+--
+X(rd) = ~(X(rs1) ^ X(rs2));
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbb (<<#zbb>>)
+|v1.0.0
+|冻结
+
+|Zbkb (<<#zbkb>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-xperm8,reftext="交叉开关置换（字节）"]
+==== xperm8
+
+概要::
+按字节查找向量中的索引。
+
+助记符::
+xprem8 _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x3 },
+    { bits:  5, name: 0xC },
+    { bits:  5, name: 'rd'},
+    { bits:  3, name: 0x4 },
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x14 },
+]}
+....
+
+描述::
+xperm8 指令按字节操作。rs1 寄存器包含一个 XLEN/8 个 8 位元素的向量。
+rs2 寄存器包含一个 XLEN/8 个 8 位索引的向量。
+结果是 rs2 中的每个元素被 rs1 中的索引元素替换，如果 rs2 中的索引超出范围，则为零。
+
+操作::
+[source,sail]
+--
+val xperm8_lookup : (bits(8), xlenbits) -> bits(8)
+function xperm8_lookup (idx, lut) = {
+(lut >> (idx @ 0b000))[7..0]
+}
+function clause execute ( XPERM_8 (rs2,rs1,rd)) = {
+result : xlenbits = EXTZ(0b0);
+foreach(i from 0 to xlen by 8) {
+result[i+7..i] = xperm8_lookup(X(rs2)[i+7..i], X(rs1));
+};
+X(rd) = result;
+RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbkx (<<#zbkx>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-xperm4,reftext="交叉开关置换（半字节）"]
+==== xperm4
+
+概要::
+按半字节查找向量中的索引。
+
+助记符::
+xperm4 _rd_, _rs1_, _rs2_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+    { bits:  2, name: 0x3 },
+    { bits:  5, name: 0xC },
+    { bits:  5, name: 'rd'},
+    { bits:  3, name: 0x2 },
+    { bits:  5, name: 'rs1' },
+    { bits:  5, name: 'rs2' },
+    { bits:  7, name: 0x14 },
+]}
+....
+
+描述::
+xperm4 指令按半字节操作。rs1 寄存器包含一个 XLEN/4 个 4 位元素的向量。
+rs2 寄存器包含一个 XLEN/4 个 4 位索引的向量。
+结果是 rs2 中的每个元素被 rs1 中的索引元素替换，如果 rs2 中的索引超出范围，则为零。
+
+操作::
+[source,sail]
+--
+val xperm4_lookup : (bits(4), xlenbits) -> bits(4)
+function xperm4_lookup (idx, lut) = {
+(lut >> (idx @ 0b00))[3..0]
+}
+function clause execute ( XPERM_4 (rs2,rs1,rd)) = {
+result : xlenbits = EXTZ(0b0);
+foreach(i from 0 to xlen by 4) {
+result[i+3..i] = xperm4_lookup(X(rs2)[i+3..i], X(rs1));
+};
+X(rd) = result;
+RETIRE_SUCCESS
+}
+--
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbkx (<<#zbkx>>)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[#insns-zip,reftext="位交错"]
+==== zip
+
+概要::
+将源字的奇偶位收集到目标字的高低半部分。
+
+助记符::
+zip _rd_, _rs_
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 2, name: 0x3},
+{bits: 5, name: 0x4},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1},
+{bits: 5, name: 'rs1'},
+{bits: 5, name: 0x1e},
+{bits: 7, name: 0x4},
+]}
+....
+
+描述::
+此指令将源字的所有奇偶位分散到目标字的高低半部分。
+它是 <<insns-unzip,unzip>> 指令的逆操作。
+此指令仅在 RV32 上可用。
+
+操作::
+[source,sail]
+--
+foreach (i from 0 to xlen/2-1) {
+  X(rd)[2*i] = X(rs1)[i]
+  X(rd)[2*i+1] = X(rs1)[i+xlen/2]
+}
+--
+
+.软件提示
+[NOTE, caption="SH" ]
+===============================================================
+此指令对于在 32 位架构上实现 SHA3 密码哈希函数非常有用，因为它直接实现了用于加速 64 位旋转的位交错操作。
+===============================================================
+
+包含于::
+[%header,cols="4,2,2"]
+|===
+|扩展
+|最低版本
+|生命周期状态
+
+|Zbkb (<<#zbkb>>) (RV32)
+|v1.0.0-rc4
+|冻结
+|===
+
+<<<
+
+[[crypto_scalar_es]]
+=== 熵源
+
+`seed` CSR 提供了一个符合 NIST SP 800-90B cite:[TuBaKe:18] 或 BSI AIS-31 cite:[KiSc11] 标准的物理熵源 (ES) 接口。
+
+熵源本身不是一个密码学安全的随机位生成器 (RBG)，但可以在对称密码学的帮助下构建多种类型的标准（和非标准）RBG。预期的用法是对熵源的输出进行调节（通常使用 SHA-2/3），并将其用于生成密码学安全的确定性随机位生成器 (DRBG)，例如基于 AES 的 `CTR_DRBG` cite:[BaKe15]。
+熵源、调节和 DRBG 的组合可以用来安全地生成随机位 cite:[BaKeRo:21]。
+有关认证和自我认证程序的非规范性描述、设计原理以及有关如何使用熵源输出的更详细建议，请参见 <<crypto_scalar_appx_es>>。
+
+[[crypto_scalar_seed_csr]]
+==== `seed` CSR
+
+`seed` 是位于地址 `0x015` 的非特权 CSR。
+`seed` 的 32 位内容如下：
+
+[%autowidth.stretch,cols="^,^,<",options="header",]
+|=======================================================================
+|位 |名称 |描述
+
+|`31:30` |`OPST` |状态：`BIST` (00), `WAIT` (01), `ES16` (10), `DEAD` (11)。
+
+|`29:24` |_保留_ |供 RISC-V 规范将来使用。
+
+|`23:16` |_自定义_ |指定用于自定义和实验用途。
+
+|`15: 0` |`entropy` |16 位随机数，仅当 `OPST=ES16` 时。
+|=======================================================================
+
+`seed` CSR 必须使用读写指令访问。只读指令如 `CSRRS/CSRRC` 与 `rs1=x0` 或 `CSRRSI/CSRRCI` 与 `uimm=0` 将引发非法指令异常。
+实现必须忽略写入值（在 `rs1` 或 `uimm` 中）。
+写入的目的是信号轮询和刷新。
+
+指令 `csrrw rd, seed, x0` 可用于获取种子状态和熵值。它在 RV32 和 RV64 基础架构上都可用，并将 32 位字零扩展到 XLEN 位。
+
+编码::
+[wavedrom, , svg]
+....
+{reg:[
+{bits: 7, name: 0x73, attr: "SYSTEM"},
+{bits: 5, name: 'rd'},
+{bits: 3, name: 0x1, attr: "CSRRW"},
+{bits: 5, name: 0x0, attr: "x0"},
+{bits: 12, name: 0x15, attr: "seed = 0x015"},
+]}
+....
+
+`seed` CSR 还受执行模式的访问控制，除非明确授予访问权限，否则在 M 模式之外尝试读或写访问将引发非法指令异常。有关更多详细信息，请参见 <<crypto_scalar_es_access>>。
+
+状态位 `seed[31:30]` = `OPST` 可能是 `ES16` (10)，表示轮询成功，或三种熵轮询失败状态之一 `BIST` (00)、`WAIT` (01) 或 `DEAD` (11)，如下所述。
+
+每个返回的 `seed[15:0]` = `entropy` 值在 `OPST`=`ES16` (`seed[31:30]` = `10`) 时表示唯一的随机数，即使其数值与先前轮询的 `entropy` 值相同。`entropy` 位的实现要求在 <<crypto_scalar_es_req>> 中定义。
+当 `OPST` 不是 `ES16` 时，`entropy` 必须设置为 0。
+实现可以安全地将保留和自定义位设置为零。
+
+出于安全原因，接口保证不会多次提供秘密 `entropy` 字。因此，轮询（读取）还必须具有清除（读取即擦除）`entropy` 内容并将状态更改为 `WAIT` 的副作用（除非 `ES16` 立即可用）。其他状态（`BIST`、`WAIT` 和 `DEAD`）可能不受轮询影响。
+
+`seed[31:30]`=`OPST` 返回的状态位：
+
+* `00` - `BIST`
+表示正在执行内置自测试 "按需" (BIST) 测试。如果 `OPST` 从任何其他状态暂时返回到 `BIST`，这表示非致命的自测试警报，
+这是不可操作的，除了被记录。
+这样的 `BIST` 警报必须被锁存，直到至少轮询一次以使软件记录其发生。
+
+* `01` - `WAIT`
+表示尚未有足够的熵可用。这不是错误状态，可能（实际上）比 ES16 更频繁，因为物理熵源通常具有低带宽。
+
+* `10` - `ES16`
+表示成功；低位 `seed[15:0]` 将具有 16 位随机数 (`entropy`)，无论实现如何，都保证满足某些最低熵要求。
+
+* `11` - `DEAD`
+是不可恢复的自测试错误。这可能表示硬件故障、安全问题，或（极少见）连续测试程序中的 1 类统计假阳性。在致命故障的情况下，立即锁定也可能是专用安全设备中的适当响应。
+
+**示例。** `0x8000ABCD` 是有效的 `ES16` 状态输出，其中 `0xABCD` 是 `entropy` 值。`0xFFFFFFFF` 是无效输出 (`DEAD`)，没有 `entropy` 值。
+
+[[crypto_scalar_es_state,reftext="熵源状态转换图"]]
+====
+image::es_state.svg[title="熵源状态转换图。", align="center",scaledwidth=40%]
+通常，操作状态在 WAIT（无数据）和 ES16 之间交替，这意味着已轮询 16 位随机数 (`entropy`)。内置自测试 (BIST) 仅在复位后或信号非致命自测试警报时发生（如果在 WAIT 或 ES16 之后达到）。DEAD 是不可恢复的错误状态。
+====
+
+[[crypto_scalar_es_req]]
+==== 熵源要求
+
+输出 `entropy` (`seed[15:0]` 在 ES16 状态下) 不一定是完全调节的随机数，因为较小、低功耗实现的硬件和能量限制。然而，定义了最低要求。主要要求是 256 位输入块中的 2 比 1 密码学后处理将产生 128 位 "完全熵" 输出块。
+熵源用户可以做出这种保守的假设，但不禁止使用相对于所需结果熵的种子位数的两倍以上。
+
+熵源的实现应至少满足以下要求集之一，以被视为安全和可靠的设计：
+
+*	<<crypto_scalar_es_req_90b>>: 符合 NIST SP 800-90B cite:[TuBaKe:18] 标准的物理熵源，评估的最小熵为每 256 输出位 192 位（最小熵率 0.75）。
+
+*	<<crypto_scalar_es_req_ptg2>>: 符合 AIS-31 PTG.2 cite:[KiSc11] 标准的物理熵源，意味着平均 Shannon 熵率为 0.997。源还必须满足 NIST 800-90B 最小熵率 192/256 = 0.75。
+
+*	<<crypto_scalar_es_req_virt>>: 虚拟熵源是从物理熵源生成的 DRBG。它必须具有至少 256 位（后量子类别 5）内部安全级别。
+
+所有实现必须按各自标准的要求发出初始化、测试模式和健康警报。这可能需要实现者以安全可靠的方式添加非标准（自定义）测试接口，示例见 <<crypto_scalar_es_getnoise>>。
+
+[[crypto_scalar_es_req_90b]]
+===== NIST SP 800-90B / FIPS 140-3 要求
+
+必须实现所有 NIST SP 800-90B cite:[TuBaKe:18] 要求的组件和健康测试机制。
+
+如果可以从每个 256 位（16*16 位）成功但可能不连续的 `entropy` (ES16) 输出序列中获得 128 位 _完全熵_，则满足熵要求，使用经过验证的调节算法（如密码学哈希，见 SP 800-90B cite:[TuBaKe:18] 第 3.1.5.1.1 节）。实际上，要求最小熵率为 0.75 或更高。
+
+请注意，128 位估计输入最小熵不会在 SP 800-90B/C 评估中产生 128 位调节的完全熵。相反，意味着每个 256 位序列应至少具有 128+64 = 192 位的最小熵，如 SP 800-90C cite:[BaKeRo:21] 中讨论的；即使有（几乎）无限量的熵源数据和计算能力，成功 "猜测" 单个 256 位输出序列的可能性也不应高于 2^-192^。
+
+与其尝试定义熵源必须满足的所有数学和架构属性，我们定义物理熵源必须足够强大和健壮，以通过等效的 NIST SP 800-90 评估和认证，在密码学调节比率 2:1 时产生完全熵的 128 位输出块。
+
+尽管要求以 128 位完全熵块定义，但我们建议 256 位安全性。这可以通过使用至少 512 个 `entropy` 位来初始化具有 256 位安全性的 DRBG 来实现。
+
+[[crypto_scalar_es_req_ptg2]]
+===== BSI AIS-31 PTG.2 / 通用标准要求
+
+对于替代的通用标准认证（或自我认证），必须实现 AIS 31 PTG.2 类 cite:[KiSc11]（第 4.3 节）要求的硬件组件和机制。
+除了 AIS-31 PTG.2 随机性要求（Shannon 熵率为 0.997，如该标准中评估的），总体最小熵要求仍然存在，如 <<crypto_scalar_es_req_90b>> 中讨论的。请注意，800-90B 最小熵可能显著低于 AIS-31 Shannon 熵。这两个指标不应等同或混淆。
+
+[[crypto_scalar_es_req_virt]]
+===== 虚拟源：安全要求
+
+注意：虚拟源不是 ISA 合规性要求。它是为 RISC-V 安全生态系统的利益而定义的，以便虚拟系统可以具有一致的安全级别。
+
+虚拟源不是物理熵源，但提供了对隐蔽通道、耗尽攻击和操作环境中主机识别的额外保护，这些环境不能完全信任直接访问硬件资源。尽管信任有限，实现者应尽量保证即使在这样的环境中也有足够的熵可用于安全的密码学操作。
+
+虚拟源捕获对 `seed` CSR 的访问，模拟它，或以其他方式实现它，可能没有直接访问物理熵源。输出可以是密码学安全的伪随机数，而不是实际的熵，但必须具有至少 256 位的安全性，如下定义。虚拟源特别适用于客户操作系统、沙盒、仿真器和类似用例。
+
+作为技术定义，对输出的随机区分攻击应需要与对具有 256 位密钥的安全块密码（例如 AES 256）的穷举密钥搜索相当或更大的计算资源。这适用于经典和量子计算模型，但仅适用于经典信息流。
+虚拟源安全要求映射到后量子安全类别 5 cite:[NI16]。
+
+任何限制安全强度的 `seed` CSR 实现不得将其降低到低于 256 位。如果安全级别低于 256 位，则接口必须不可用。
+
+虚拟熵源不需要实现 `WAIT` 或 `BIST` 状态。
+如果主机 DRBG 或熵源失败且没有足够的种子材料用于主机 DRBG，则应失败 (`DEAD`)。
+
+[[crypto_scalar_es_access]]
+==== `seed` 的访问控制
+
+默认情况下，`seed` CSR 仅在 M 模式下可用，但可以通过 `mseccfg.sseed` 和 `mseccfg.useed` 访问控制位使其在其他模式下可用。`sseed` 是 `mseccfg` CSR 的第 `9` 位，`useed` 是第 `8` 位。
+如果未将相应的访问控制位设置为 1，则从 U、S 或 HS 模式尝试访问 `seed` 将引发非法指令异常。
+
+VS 和 VU 模式存在于实现了 Hypervisor (H) 扩展的系统中。如果需要，管理程序可以模拟来自虚拟机的种子 CSR 访问。尝试从虚拟模式 VS 和 VU 访问 `seed` 总是引发异常；只读指令会引发非法指令异常，而读写指令（可能会被模拟）仅在 `mseccfg.sseed=1` 时引发虚拟指令异常。请注意，`mseccfg.useed` 对 VS 或 VU 模式的异常类型没有影响。
+
+.熵源访问控制。
+
+[cols="1,1,1,7",options="header",]
+|=======================================================================
+|模式 | `sseed` | `useed` | 描述
+
+| M
+| `*`
+| `*`
+| `seed` CSR 在机器模式下始终可用（使用 CSR 读写指令）。尝试在没有写入的情况下读取将引发非法指令异常，无论模式和访问控制位如何。
+
+| U
+| `*`
+| `0`
+| 任何 `seed` CSR 访问都会引发非法指令异常。
+
+| U
+| `*`
+| `1`
+| `seed` CSR 可正常访问。读写不会引发异常。
+
+| S/HS
+| `0`
+| `*`
+| 任何 `seed` CSR 访问都会引发非法指令异常。
+
+| S/HS
+| `1`
+| `*`
+| `seed` CSR 可正常访问。读写不会引发异常。
+
+| VS/VU
+| `0`
+| `*`
+| 任何 `seed` CSR 访问都会引发非法指令异常。
+
+| VS/VU
+| `1`
+| `*`
+| 读写 `seed` 访问引发虚拟指令异常，而其他访问条件引发非法指令异常。
+
+|=======================================================================
+
+系统应实施从较低特权模式到物理熵源的仔细考虑的访问控制策略。系统可以捕获对 `seed` 的访问尝试，并向较低特权客户端提供 _虚拟熵源_ 数据 (<<crypto_scalar_es_req_virt>>) 而不是调用 SP 800-90B (<<crypto_scalar_es_req_90b>>) 或 PTG.2 (<<crypto_scalar_es_req_ptg2>>) _物理熵源_。模拟的 `seed` 数据生成是通过适当种子的安全软件 DRBG 进行的。有关直接访问熵源的安全考虑，请参见 <<crypto_scalar_appx_es_access>>。
+
+实现可以实现 `mseccfg`，使得 `[s,u]seed` 是只读常量值 `0`。软件可以通过将 `1` 写入 `[s,u]seed` 并读取结果来发现是否可以在 U 和 S 模式下启用对 `seed` CSR 的访问。
+
+如果未实现 S 或 U 模式，则 `mseccfg` 的相应 `[s,u]seed` 位必须硬连线为零。
+`[s,u]seed` 位必须具有定义的复位值。系统不得允许它们在复位后处于未定义状态。
+如果实现了 `Zkr`，则存在 `mseccfg`，或者如果其他处理器功能需要它。如果未实现 `Zkr`，则 `[s,u]seed` 位必须硬连线为零。
+
+[[crypto_scalar_zkt]]
+
+=== 数据独立执行延迟子集：Zkt
+
+Zkt 扩展证明机器具有数据独立的执行时间，用于安全的指令子集。此属性通常称为 _"恒定时间"_，尽管不应按字面意思理解。
+
+所有当前提议的密码学指令（标量 K 扩展）都在此列表中，以及来自 I、M、C 和 B 扩展的一组相关支持指令。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+未能防止通过直接时间通道泄漏敏感参数被视为严重的安全漏洞，通常会导致 CERT CVE 安全公告。
+====
+
+==== 范围和目标
+
+在程序员和 RISC-V 实现之间建立了一个 "ISA 合同"，即 Zkt 指令不会通过执行延迟的差异泄露处理的秘密数据（明文、密钥信息或其他 "敏感安全参数" -- FIPS 140-3 术语）的信息。Zkt 不定义核心中可用的一组指令；它只是限制了某些指令的行为，如果这些指令被实现。
+
+目前，本文档的范围在于标量 RV32/RV64 处理器。矢量密码学指令（和适当的矢量支持指令）将稍后添加，以及其他希望声明无泄漏执行延迟属性的安全相关功能。
+
+加载、存储、条件分支被排除在外，以及一组很少需要处理秘密数据的指令。还排除了由于其他 ISA 处理器的限制而在标准密码学中间件中存在变通方法的指令。
+
+声明的目标是，当在 Zkt 启用的 RISC-V 目标上编译和运行时，OpenSSL、BoringSSL（Android）、Linux 内核和类似的受信任软件不会有直接可观察的时间侧信道。Zkt 扩展明确声明了许多密码学开发人员常见的延迟假设。
+
+供应商不必实现列表中的所有指令才能符合 Zkt；然而，如果他们声称具有 Zkt 并实现了任何列出的指令，则必须具有数据独立的延迟。
+
+例如，许多简单的 RV32I 和 RV64I 核心（没有乘法、压缩、位操作或密码学扩展）在技术上符合 Zkt。可以使用 "位切片" 技术在它们上实现恒定时间 AES，但与使用 AES 指令的实现相比，它将非常慢。即使是基于布尔逻辑指令的大部分位切片密码实现也不能保证在没有 Zkt 证明的核心上是安全的。
+
+遵循 Zkt 的乱序实现仍然可以自由地融合、破解、更改甚至忽略指令序列，只要优化是确定性应用的，而不是基于操作数数据的。
+指导原则应该是，不应基于执行延迟泄露关于正在操作的数据的信息。
+
+[NOTE]
+====
+未来的扩展或其他技术将解决在使用值预测的高级乱序能力实现中数据独立执行的问题，或其他数据依赖的实现。
+====
+
+.给软件开发人员的注意事项
+[WARNING,caption="SH"]
+====
+编程技术只能减轻由算术、缓存和分支直接引起的泄漏。其他 ISA 存在微架构问题，如 Spectre、Meltdown、Speculative Store Bypass、Rogue System Register Read、Lazy FP State Restore、Bounds Check Bypass Store、TLBleed 和 L1TF/Foreshadow 等。参见例如 link:https://github.com/nsacyber/Hardware-and-Firmware-Security-Guidance[NSA 硬件和固件安全指南]
+
+本提案的职责范围不包括减轻这些 _微架构_ 泄漏。
+====
+
+==== 背景
+
+* 时间攻击比 2010 年之前意识到的更强大，这导致了当前密码学代码库中的重大缓解努力。
+* 密码学开发人员使用静态和动态安全测试工具来跟踪秘密信息的处理，并检测其影响分支或用于表查找的情况。
+* Zkt 的架构测试可以是务实和半正式的；通过有意识地实现（相关的迭代多周期指令或由微操作组成的指令）以避免数据依赖的延迟，通常可以实现对基本时间攻击的 _设计安全_。
+* 实验室测试可以利用 ISO/IEC 17825 cite:[IS16] 中描述的统计时间攻击泄漏分析技术。
+* 二进制可执行文件不应在指令编码中包含秘密（Kerckhoffs 原则），因此指令时间可能泄露关于立即数、输入寄存器顺序等的信息。在某些系统中，二进制加载器修改可执行文件以进行重定位，并且希望保持执行位置（PC）秘密时，可能对此有例外。这就是为什么 LUI、AUIPC 和 ADDI 等指令在列表中的原因。
+* 审计工具使用的规则相对简单易懂。简而言之；我们称明文、秘密密钥、扩展密钥、随机数和其他此类变量为 "秘密"。一个秘密变量（算术上）修改任何其他变量/寄存器也将其变为秘密。如果一个秘密最终影响加载或存储的地址计算，这是一个违规。如果一个秘密影响分支的条件，这也是一个违规。一个秘密变量位置或寄存器通过特定的清零/清理或被声明为密文（或其他不再是秘密的信息）变为非秘密。本质上，秘密在它们是秘密时只能 "触及" Zkt 列表中的指令。
+
+==== 特定指令理由
+
+* HINT 指令形式（通常是 `rd=x0` 的编码）不受数据独立时间要求的约束。
+* 浮点（F、D、Q、L 扩展）目前不受恒定时间要求的约束，因为它们在标准化密码学中应用很少。如果某个特定算法（如 PQC 签名算法 Falcon）变得至关重要，我们可能会考虑将浮点加、减、乘作为某些浮点扩展的恒定时间要求。
+* 密码学家通常假设除法是可变时间的（而乘法是恒定时间的），并以此假设实现他们的 Montgomery 约简例程。
+* Zicsr、Zifencei 被排除在外。
+* 一些指令在列表中只是因为我们认为将它们包括在测试范围内无害。
+
+==== 编程信息
+
+有关安全编程 "模型" 的背景信息，请参见：
+
+* Thomas Pornin: _"为什么恒定时间密码学？"_（对时间假设的一个很好的介绍。）https://www.bearssl.org/constanttime.html
+* Jean-Philippe Aumasson: _"低级密码学软件指南。"_（一份推荐列表。）https://github.com/veorq/cryptocoding
+* Peter Schwabe: _"时间攻击和对策。"_（讲义幻灯片 -- 很好的参考资料。）https://summerschool-croatia.cs.ru.nl/2016/slides/PeterSchwabe.pdf
+* Adam Langley: _"ctgrind。"_（这是 2010 年的，但仍然相关。）https://www.imperialviolet.org/2010/04/01/ctgrind.html
+* Kris Kwiatkowski: _"使用内存消毒器验证恒定时间代码。"_ https://www.amongbytes.com/post/20210709-testing-constant-time/
+* 有关时间攻击漏洞的早期示例，请参见 https://www.kb.cert.org/vuls/id/997481 和相关学术论文。
+
+==== Zkt 列表
+
+以下指令包含在 `Zkt` 子集中
+它们在此按其原始父扩展分组列出。
+
+.给实现者的注意事项
+[NOTE, caption="SH"]
+====
+您不需要实现所有这些指令来实现 `Zkt`。
+相反，核心实现的每一条这些指令都必须遵守 `Zkt` 的要求。
+====
+
+=====	RVI（基本指令集）
+
+仅包括基本算术和 `slt*`（用于进位计算）。
+数据独立时间要求不适用于这些指令的 HINT 编码形式。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; | lui   _rd_, _imm_        |  <<insns-lui>>
+| &#10003; | &#10003; | auipc _rd_, _imm_        |  <<insns-auipc>>
+| &#10003; | &#10003; | addi  _rd_, _rs1_, _imm_ |  <<insns-addi>>
+| &#10003; | &#10003; | slti  _rd_, _rs1_, _imm_ |  <<insns-slti>>
+| &#10003; | &#10003; | sltiu _rd_, _rs1_, _imm_ |  <<insns-sltiu>>
+| &#10003; | &#10003; | xori  _rd_, _rs1_, _imm_ |  <<insns-xori>>
+| &#10003; | &#10003; | ori   _rd_, _rs1_, _imm_ |  <<insns-ori>>
+| &#10003; | &#10003; | andi  _rd_, _rs1_, _imm_ |  <<insns-andi>>
+| &#10003; | &#10003; | slli  _rd_, _rs1_, _imm_ |  <<insns-slli>>
+| &#10003; | &#10003; | srli  _rd_, _rs1_, _imm_ |  <<insns-srli>>
+| &#10003; | &#10003; | srai  _rd_, _rs1_, _imm_ |  <<insns-srai>>
+| &#10003; | &#10003; | add   _rd_, _rs1_, _rs2_ |  <<insns-add>>
+| &#10003; | &#10003; | sub   _rd_, _rs1_, _rs2_ |  <<insns-sub>>
+| &#10003; | &#10003; | sll   _rd_, _rs1_, _rs2_ |  <<insns-sll>>
+| &#10003; | &#10003; | slt   _rd_, _rs1_, _rs2_ |  <<insns-slt>>
+| &#10003; | &#10003; | sltu  _rd_, _rs1_, _rs2_ |  <<insns-sltu>>
+| &#10003; | &#10003; | xor   _rd_, _rs1_, _rs2_ |  <<insns-xor>>
+| &#10003; | &#10003; | srl   _rd_, _rs1_, _rs2_ |  <<insns-srl>>
+| &#10003; | &#10003; | sra   _rd_, _rs1_, _rs2_ |  <<insns-sra>>
+| &#10003; | &#10003; | or    _rd_, _rs1_, _rs2_ |  <<insns-or>>
+| &#10003; | &#10003; | and   _rd_, _rs1_, _rs2_ |  <<insns-and>>
+|          | &#10003; | addiw _rd_, _rs1_, _imm_ |  <<insns-addiw>>
+|          | &#10003; | slliw _rd_, _rs1_, _imm_ |  <<insns-slliw>>
+|          | &#10003; | srliw _rd_, _rs1_, _imm_ |  <<insns-srliw>>
+|          | &#10003; | sraiw _rd_, _rs1_, _imm_ |  <<insns-sraiw>>
+|          | &#10003; | addw  _rd_, _rs1_, _rs2_ |  <<insns-addw>>
+|          | &#10003; | subw  _rd_, _rs1_, _rs2_ |  <<insns-subw>>
+|          | &#10003; | sllw  _rd_, _rs1_, _rs2_ |  <<insns-sllw>>
+|          | &#10003; | srlw  _rd_, _rs1_, _rs2_ |  <<insns-srlw>>
+|          | &#10003; | sraw  _rd_, _rs1_, _rs2_ |  <<insns-sraw>>
+|===
+
+=====	RVM（乘法）
+
+包括乘法；除法和取余被排除。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; | mul    _rd_, _rs1_, _rs2_ | <<insns-mul>>
+| &#10003; | &#10003; | mulh   _rd_, _rs1_, _rs2_ | <<insns-mulh>>
+| &#10003; | &#10003; | mulhsu _rd_, _rs1_, _rs2_ | <<insns-mulhsu>>
+| &#10003; | &#10003; | mulhu  _rd_, _rs1_, _rs2_ | <<insns-mulhu>>
+|          | &#10003; | mulw   _rd_, _rs1_, _rs2_ | <<insns-mulw>>
+|===
+
+=====	RVC（压缩）
+
+与 RVI 中的标准相同。按象限组织。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; | c.nop      | <<insns-c_nop>>
+| &#10003; | &#10003; | c.addi     | <<insns-c_addi>>
+|          | &#10003; | c.addiw    | <<insns-c_addiw>>
+| &#10003; | &#10003; | c.lui      | <<insns-c_lui>>
+| &#10003; | &#10003; | c.srli     | <<insns-c_srli>>
+| &#10003; | &#10003; | c.srai     | <<insns-c_srai>>
+| &#10003; | &#10003; | c.andi     | <<insns-c_andi>>
+| &#10003; | &#10003; | c.sub      | <<insns-c_sub>>
+| &#10003; | &#10003; | c.xor      | <<insns-c_xor>>
+| &#10003; | &#10003; | c.or       | <<insns-c_or>>
+| &#10003; | &#10003; | c.and      | <<insns-c_and>>
+|          | &#10003; | c.subw     | <<insns-c_subw>>
+|          | &#10003; | c.addw     | <<insns-c_addw>>
+| &#10003; | &#10003; | c.slli     | <<insns-c_slli>>
+| &#10003; | &#10003; | c.mv       | <<insns-c_mv>>
+| &#10003; | &#10003; | c.add      | <<insns-c_add>>
+|===
+
+=====	RVK（标量密码学）
+
+包括所有 K 特定指令。
+此外，`seed` CSR 的延迟应独立于 `ES16` 状态输出的 `entropy` 位，因为这是一个敏感的安全参数。
+见 <<crypto_scalar_appx_es_access>>。
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; |          | aes32dsi     | <<insns-aes32dsi>>
+| &#10003; |          | aes32dsmi    | <<insns-aes32dsmi>>
+| &#10003; |          | aes32esi     | <<insns-aes32esi>>
+| &#10003; |          | aes32esmi    | <<insns-aes32esmi>>
+|          | &#10003; | aes64ds      | <<insns-aes64ds>>
+|          | &#10003; | aes64dsm     | <<insns-aes64dsm>>
+|          | &#10003; | aes64es      | <<insns-aes64es>>
+|          | &#10003; | aes64esm     | <<insns-aes64esm>>
+|          | &#10003; | aes64im      | <<insns-aes64im>>
+|          | &#10003; | aes64ks1i    | <<insns-aes64ks1i>>
+|          | &#10003; | aes64ks2     | <<insns-aes64ks2>>
+| &#10003; | &#10003; | sha256sig0   | <<insns-sha256sig0>>
+| &#10003; | &#10003; | sha256sig1   | <<insns-sha256sig1>>
+| &#10003; | &#10003; | sha256sum0   | <<insns-sha256sum0>>
+| &#10003; | &#10003; | sha256sum1   | <<insns-sha256sum1>>
+| &#10003; |          | sha512sig0h  | <<insns-sha512sig0h>>
+| &#10003; |          | sha512sig0l  | <<insns-sha512sig0l>>
+| &#10003; |          | sha512sig1h  | <<insns-sha512sig1h>>
+| &#10003; |          | sha512sig1l  | <<insns-sha512sig1l>>
+| &#10003; |          | sha512sum0r  | <<insns-sha512sum0r>>
+| &#10003; |          | sha512sum1r  | <<insns-sha512sum1r>>
+|          | &#10003; | sha512sig0   | <<insns-sha512sig0>>
+|          | &#10003; | sha512sig1   | <<insns-sha512sig1>>
+|          | &#10003; | sha512sum0   | <<insns-sha512sum0>>
+|          | &#10003; | sha512sum1   | <<insns-sha512sum1>>
+| &#10003; | &#10003; | sm3p0        | <<insns-sm3p0>>
+| &#10003; | &#10003; | sm3p1        | <<insns-sm3p1>>
+| &#10003; | &#10003; | sm4ed        | <<insns-sm4ed>>
+| &#10003; | &#10003; | sm4ks        | <<insns-sm4ks>>
+|===
+
+=====	RVB（位操作）
+
+包括 <<zbkb>>、<<zbkc>> 和 <<zbkx>> 扩展的全部内容。
+
+.给实现者的注意事项
+[NOTE,caption="SH"]
+====
+请记住，`rev`、`zip` 和 `unzip` 是分别表示 `grevi`、`shfli` 和 `unshfli` 的伪指令。
+====
+
+[%header,cols="^1,^1,4,8"]
+|===
+|RV32
+|RV64
+|助记符
+|指令
+
+| &#10003; | &#10003; |  clmul       | <<insns-clmul>>
+| &#10003; | &#10003; |  clmulh      | <<insns-clmulh>>
+| &#10003; | &#10003; |  xperm4      | <<insns-xperm4>>
+| &#10003; | &#10003; |  xperm8      | <<insns-xperm8>>
+| &#10003; | &#10003; |  ror         | <<insns-ror>>
+| &#10003; | &#10003; |  rol         | <<insns-rol>>
+| &#10003; | &#10003; |  rori        | <<insns-rori>>
+|          | &#10003; |  rorw        | <<insns-rorw>>
+|          | &#10003; |  rolw        | <<insns-rolw>>
+|          | &#10003; |  roriw       | <<insns-roriw>>
+| &#10003; | &#10003; |  andn        | <<insns-andn>>
+| &#10003; | &#10003; |  orn         | <<insns-orn>>
+| &#10003; | &#10003; |  xnor        | <<insns-xnor>>
+| &#10003; | &#10003; |  pack        | <<insns-pack>>
+| &#10003; | &#10003; |  packh       | <<insns-packh>>
+|          | &#10003; |  packw       | <<insns-packw>>
+| &#10003; | &#10003; |  brev8       | <<insns-brev8>>
+| &#10003; | &#10003; |  rev8        | <<insns-rev8>>
+| &#10003; |          |  zip         | <<insns-zip>>
+| &#10003; |          |  unzip       | <<insns-unzip>>
+|===
+
+[[crypto_scalar_appx_rationale]]
+=== 指令理由
+
+本节包含标量密码学扩展中指令的各种理由、设计说明和使用建议。它还尝试记录指令设计的来源或贡献者。
+
+==== AES 指令
+
+32 位指令来源于 cite:[MJS:LWAES:20] 中的工作，并贡献给 RISC-V 密码学扩展。
+64 位指令由任务组成员在我们的邮件列表中协作开发。
+
+支持材料，包括所有 AES 指令的理由和设计空间探索，见论文
+_"link:https://doi.org/10.46586/tches.v2021.i1.109-136[The design of scalar AES Instruction Set Extensions for RISC-V]"_ cite:[MNPSW:20]。
+
+==== SHA2 指令
+
+这些指令基于布里斯托大学 XCrypto 项目中的学术工作开发，并贡献给 RISC-V 密码学扩展。
+
+RV32 SHA2-512 指令基于此工作，并在 cite:[MJS:LWSHA:20] 中开发，然后以相同方式贡献。
+
+==== SM3 和 SM4 指令
+
+SM4 指令来源于 cite:[MJS:LWAES:20] 中的工作，因此与 RV32 AES 指令非常相似。
+
+SM3 指令受 SHA2 指令启发，并基于 cite:[MJS:LWSHA:20] 中的开发工作，然后贡献给 RISC-V 密码学扩展。
+
+[[crypto_scalar_zkb]]
+==== 用于密码学的位操作指令
+
+对称密钥密码学和密码学哈希函数中使用的许多基本操作都得到了 RISC-V 位操作 cite:[riscv:bitmanip:repo] 扩展的良好支持。
+
+注意：本节重复了 <<zbkb>>、<<zbkc>> 和 <<zbkx>> 中的许多信息，但包含更多理由。
+
+我们建议标量密码学扩展 _重用_ 位操作扩展 `Zb[abc]` 的一部分指令。
+具体来说，这意味着实现
+_任一_
+标量密码学扩展，
+_或_
+`Zb[abc]`，
+_或_
+两者的核心，都需要实现这些指令。
+
+===== 旋转
+
+----
+RV32, RV64:                         RV64 仅:
+    ror    rd, rs1, rs2                 rorw   rd, rs1, rs2
+    rol    rd, rs1, rs2                 rolw   rd, rs1, rs2
+    rori   rd, rs1, imm                 roriw  rd, rs1, imm
+----
+
+有关这些指令的详细信息，请参见 cite:[riscv:bitmanip:draft]（第 3.1.1 节）。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+标准按位旋转是许多分组密码和哈希函数中的基本操作；它特别出现在 ARX（加法、旋转、异或）类分组密码和流密码中。
+
+* 使用 32 位旋转的算法：
+  SHA256、AES（移位行）、ChaCha20、SM3。
+* 使用 64 位旋转的算法：
+  SHA512、SHA3。
+====
+
+===== 位和字节置换
+
+----
+RV32:
+    brev8   rd, rs1 // grevi rd, rs1,  7 - 反转字节中的位
+    rev8    rd, rs1 // grevi rd, rs1, 24 - 反转 32 位字中的字节
+
+RV64:
+    brev8   rd, rs1 // grevi rd, rs1,  7 - 反转字节中的位
+    rev8    rd, rs1 // grevi rd, rs1, 56 - 反转 64 位字中的字节
+----
+
+标量密码学扩展提供以下指令来操作数据的位和字节字节序。
+它们都是带立即数的广义反转（`grevi`）指令的参数化。
+标量密码学扩展仅要求实现上述 `grevi` 实例，可以通过其伪操作调用。
+
+`grevi` 指令的完整规范见 cite:[riscv:bitmanip:draft]（第 2.2.2 节）。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+在设置输入和输出数据的标准字节序时，反转字中的字节在密码学中非常常见。
+字节内的位反转用于实现 Galois/Counter 模式（GCM）cite:[nist:gcm] 的 GHASH 组件。
+====
+
+----
+RV32:
+    zip     rd, rs1 // shfli   rd, rs1, 15 - 位交错
+    unzip   rd, rs1 // unshfli rd, rs1, 15 - 位反交错
+----
+
+`zip` 和 `unzip` 伪操作是更通用的 `shfli` 和 `unshfli` 指令的特定实例。
+标量密码学扩展仅要求实现上述 `[un]shfli` 实例，可以通过其伪操作调用。
+仅 RV32 实现需要这些指令。
+
+`shfli` 指令的完整规范见 cite:[riscv:bitmanip:draft]（第 2.2.3 节）。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+这些指令执行位交错（或反交错）操作，对于在 32 位架构上实现 SHA3 cite:[nist:fips:202] 算法中的 64 位旋转非常有用。
+在 RV64 上，SHA3 中的相关操作可以使用旋转指令本地完成，因此不需要 `zip` 和 `unzip`。
+====
+
+===== 无进位乘法
+
+----
+RV32, RV64:
+    clmul  rd, rs1, rs2
+    clmulh rd, rs1, rs2
+----
+
+有关此指令的详细信息，请参见 cite:[riscv:bitmanip:draft]（第 2.6 节）。
+有关这些指令的其他实现要求，请参见 <<crypto_scalar_zkt>>，与数据独立执行延迟相关。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+正如那里提到的，无进位乘法的明显密码学用例是 Galois 计数器模式（GCM）分组密码操作。
+GCM 被 NIST 推荐为分组密码操作模式 cite:[nist:gcm]，并且是 TLS 1.3 协议的唯一 _必需_ 模式。
+====
+
+===== 逻辑与否
+
+----
+RV32, RV64:
+    andn rd, rs1, rs2
+     orn rd, rs1, rs2
+    xnor rd, rs1, rs2
+----
+
+有关这些指令的详细信息，请参见 cite:[riscv:bitmanip:draft]（第 2.1.3 节）。
+这些指令在哈希函数、分组密码中非常有用，并用于实现基于软件的侧信道对策，如掩码。
+在没有三元位操作 `cmov` 指令的系统中，`andn` 指令对于恒定时间字选择也很有用。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+在密码学上下文中，这些指令有助于：
+SHA3/Keccak Chi 步骤，
+位切片函数实现，
+基于软件的功率/EM 侧信道对策基于掩码。
+====
+
+===== 打包
+
+----
+RV32, RV64:                         RV64:
+    pack   rd, rs1, rs2                 packw  rd, rs1, rs2
+    packh  rd, rs1, rs2
+----
+
+有关这些指令的详细信息，请参见 cite:[riscv:bitmanip:draft]（第 2.1.4 节）。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+`pack*` 指令对于重新排列字中的半字非常有用，并且通常在应用变换之前将数据调整到正确的形状。
+这对于将输入作为（可能未对齐的）字节字符串传递但可以对这些字节字符串组成的字进行操作的密码学算法特别有用。
+例如，在将块和密钥（可能未字对齐）加载到寄存器中以执行轮函数时，这在 AES 中发生。
+====
+
+===== 交叉开关置换指令
+
+----
+RV32, RV64:
+    xperm4 rd, rs1, rs2
+    xperm8 rd, rs1, rs2
+----
+
+有关此指令的完整描述，请参见 cite:[riscv:bitmanip:draft]（第 2.2.4 节）。
+
+`xperm4` 指令对半字节操作。
+`GPR[rs1]` 包含一个 `XLEN/4` 个 4 位元素的向量。
+`GPR[rs2]` 包含一个 `XLEN/4` 个 4 位索引的向量。
+结果是 `GPR[rs2]` 中的每个元素被 `GPR[rs1]` 中的索引元素替换，如果 `GPR[rs2]` 中的索引超出范围，则为零。
+
+`xperm8` 指令对字节操作。
+`GPR[rs1]` 包含一个 `XLEN/8` 个 8 位元素的向量。
+`GPR[rs2]` 包含一个 `XLEN/8` 个 8 位索引的向量。
+结果是 `GPR[rs2]` 中的每个元素被 `GPR[rs1]` 中的索引元素替换，如果 `GPR[rs2]` 中的索引超出范围，则为零。
+
+.给软件开发人员的注意事项
+[NOTE,caption="SH"]
+====
+该指令可用于实现任意位置换。
+对于密码学，它们可以加速位切片实现、分组密码的置换层、基于掩码的对策和 SBox 操作。
+
+使用 4 位 SBox 的轻量级分组密码包括：
+PRESENT cite:[block:present]，
+Rectangle cite:[block:rectangle]，
+GIFT cite:[block:gift]，
+Twine cite:[block:twine]，
+Skinny, MANTIS cite:[block:skinny]，
+Midori cite:[block:midori]。
+
+使用 8 位 SBox 的国家密码包括：
+Camellia cite:[block:camellia]（日本），
+Aria cite:[block:aria]（韩国），
+AES cite:[nist:fips:197]（美国，比利时），
+SM4 cite:[gbt:sm4]（中国）
+Kuznyechik（俄罗斯）。
+
+所有这些 SBox 都可以使用 `xperm8` 指令高效地、恒定时间地实现
+footnote:l[link:http://svn.clairexen.net/handicraft/2020/lut4perm/demo02.cc[]]。
+请注意，该技术也适用于基于掩码的侧信道对策。
+====
+
+[[crypto_scalar_appx_es]]
+
+=== 熵源理由和建议
+
+本 *非规范性* 附录重点介绍熵源的理由、安全性、自我认证和实现方面。因此，我们还讨论了可能需要的非 ISA 系统功能，以符合密码学标准和安全测试。
+
+====	设计和自我认证检查表
+
+密码学系统的安全性基于秘密位和密钥。
+这些位需要是随机的，并且来自密码学安全的随机位生成器（RBG）。构建安全的 RBG 需要熵源（ES）。
+
+虽然熵源实现不必是经过认证的设计，但 RISC-V 期望它们表现兼容，并且不会给用户带来不必要的安全风险。通常需要遵循适当的安全标准进行自我评估和测试以实现这一目标。
+
+*	*ISA 架构测试。* 在可能的范围内，验证本规范中的 RISC-V ISA 要求是否正确实现。这包括状态转换（<<crypto_scalar_es>> 和 <<crypto_scalar_es_getnoise>>）、访问控制（<<crypto_scalar_es_access>>），以及 `seed` ES16 `entropy` 字只能被破坏性读取。
+	RISC-V ISA 架构测试的范围是那些独立于物理熵源细节的行为。在设计阶段，烟雾测试 ES 模块可能会有所帮助。
+*	*熵的技术论证。* 这可以采取随机模型或启发式论证的形式，解释为什么噪声源输出来自随机而不是伪随机（确定性）过程，并且不容易预测或外部可观察。
+	不需要完整的物理模型；可以引用研究文献。例如，可以表明一个好的环形振荡器噪声从局部自发发生的 Johnson-Nyquist 热噪声中导出一定量的物理熵 cite:[Sa21]，因此不仅仅是 "看起来随机"。
+*	*熵源设计审查。* 熵源不仅仅是噪声源，还必须具有健康测试（<<crypto_scalar_es_security_controls>>）、调节器（<<crypto_scalar_appx_es_intro-cond>>）和具有明确定义接口的安全边界等功能。可以列出 SP 800-90B cite:[TuBaKe:18]、FIPS 140-3 实施指南 cite:[NICC21]、AIS-31 cite:[KiSc11] 或其他使用的标准的 SHALL 声明。官方和非官方的检查表可用：https://github.com/usnistgov/90B-Shall-Statements
+*	*实验测试。* 原始噪声源根据 NIST 800-90B 第 3 节 cite:[TuBaKe:18] 中定义的熵估计进行测试。
+    描述的接口 <<crypto_scalar_es_getnoise>> 可用于记录数据集以用于此目的。还需要实验性地证明调节器和健康测试组件适当地工作，以满足 <<crypto_scalar_es_req>> 的 ES16 输出熵要求。
+	对于 SP 800-90B，NIST 提供了一个免费的最小熵估计包：https://github.com/usnistgov/SP800-90B_EntropyAssessment
+*	**弹性。** 上述物理工程步骤应考虑设备的操作环境，这可能是意外的或敌对的（积极尝试利用设计中的漏洞）。
+
+有关各种实现选项的讨论，请参见 <<crypto_scalar_appx_es_implementation>>。
+
+注意：RISC-V 熵源规范的目标之一是可以从第三方许可标准 90B 熵源模块或 AIS-31 RNG IP，并与 RISC-V 处理器设计集成。与旧的（FIPS 140-2）RNG 和 DRBG 模块相比，熵源模块的面积可能相对较小（仅几千个 NAND2 门等效）。CMVP 正在引入 "熵源验证范围"，这可能允许 90B 验证用于不同的（FIPS 140-3）模块。
+
+==== 标准和术语
+
+作为一种基本的安全功能，随机数的生成受许多标准和技术评估方法的约束，主要是 FIPS 140-3 cite:[NI19,NICC21]（美国联邦使用要求）和通用标准方法 cite:[Cr17]（国际高安全性评估使用）。
+
+请注意，FIPS 140-3 是一个与其前身 FIPS 140-2 相比显著更新的标准，仅在 2020 年代开始使用。
+
+这些标准设定了 RISC-V 熵源设计的许多技术要求，如果可能，我们使用它们的术语。
+
+[[crypto_scalar_es_fig_rng,reftext="TRNG 组件"]]
+====
+image::es_dataflow.svg[align="center",scaledwidth=50%]
+`seed` CSR 提供了一个熵源（ES）接口，而不是有状态的随机数生成器。因此，它可以支持任意安全级别。可以使用密码学（AES、SHA-2/3）ISA 扩展从熵源构建高速 DRBG。
+====
+
+[[crypto_scalar_appx_es_intro-es]]
+===== 熵源（ES）
+
+熵源通过采样和处理来自噪声源的数据（<<crypto_scalar_appx_es_noise_sources>>）构建。
+在这项工作中，我们只考虑真正随机的物理来源。
+由于这些直接基于自然现象并受环境条件（可能是对抗性的）影响，因此它们需要监控这些来源的 "健康" 和质量的功能。
+
+物理熵源的要求在 NIST SP 800-90B cite:[TuBaKe:18]（<<crypto_scalar_es_req_90b>>）中规定，用于美国联邦 FIPS 140-3 cite:[NI19] 评估，以及在 BSI AIS-31 cite:[KiSc01,KiSc11]（<<crypto_scalar_es_req_ptg2>>）中规定，用于高安全性通用标准评估。
+这些标准在健康测试和熵度量类型上存在一些差异，RISC-V 支持这两种替代方案。
+
+[[crypto_scalar_appx_es_intro-cond]]
+===== 调节：密码学和非密码学
+
+原始物理随机性（噪声）源很少是统计上完美的，有些会生成大量的位，需要 "去偏" 并减少到较少的位数。这一过程称为调节。安全哈希函数是密码学调节器的一个例子。重要的是要注意，即使哈希可以使任何数据看起来随机，它也不会增加其熵含量。
+
+非密码学调节器和提取器，如 von Neumann 的 "去偏硬币投掷" cite:[Ne51] 更容易高效实现，但可能比密码学哈希（非常高效地混合输入熵）减少更多的熵含量（在移除的单个位中）。然而，它们不需要密码分析或计算难度假设，因此本质上更具未来性。有关更详细的讨论，请参见 <<crypto_scalar_appx_es_noncrypto>>。
+
+[[crypto_scalar_appx_es_intro-prng]]
+===== 伪随机数生成器（PRNG）
+
+伪随机数生成器（PRNG）使用确定性数学公式从较少的 "种子" 随机数生成大量随机数。PRNG 也分为密码学和非密码学的。
+
+非密码学 PRNG，如 LFSR 和许多编程库中的线性同余生成器，可能生成统计上令人满意的随机数，但绝不能用于密码学密钥。这是因为它们不是为了抵抗 _密码分析_ 而设计的；通常可以从一些输出中数学推导出 PRNG 的 "种子" 或内部状态。这是一个安全问题，因为了解状态允许攻击者计算未来或过去的输出。
+
+[[crypto_scalar_appx_es_intro-drbg]]
+===== 确定性随机位生成器（DRBG）
+
+密码学 PRNG 也称为确定性随机位生成器（DRBG），这是 SP 800-90A cite:[BaKe15] 使用的术语。使用强密码学算法如 AES cite:[nist:fips:197] 或 SHA-2/3 cite:[nist:fips:202,nist:fips:180:4] 从种子生成随机位。秘密种子材料就像密码学密钥；从 DRBG 输出确定种子与破解 AES 或强哈希函数一样困难。这也说明种子/密钥需要足够长，并来自可信的熵源。DRBG 仍应频繁刷新（重新播种）以确保前向和后向安全性。
+
+==== 具体理由和考虑
+
+===== (<<crypto_scalar_seed_csr>>) `seed` CSR
+
+接口设计简单，以便供应商和设备无关的驱动程序组件（例如，在 Linux 内核、嵌入式固件或密码学库中）可以使用 `seed` 生成真正的随机位。
+
+熵源不需要高带宽接口；
+单个 DRBG 源初始化只需要 512 位（256 位熵），DRBG 输出可以由任意数量的调用者共享。一旦启动，DRBG 只需要新的熵来减轻状态泄露的风险。
+
+从安全角度来看，读取时刷新秘密熵位的副作用是必不可少的。因此，我们要求在此特定 CSR 上进行写操作。
+
+阻塞指令可能更容易使用，但大多数用户应该查询 (D)RBG 而不是熵源。
+没有轮询机制，熵源在某些情况下可能会挂起数千个周期。`wfi` 或 `pause` 机制（至少可能）允许在 MCU 上节能睡眠，并在高端 CPU 上进行上下文切换。
+
+特定 `OPST = seed[31:0]` 两位机制的原因是提供冗余。如果功能发现失败且熵源实际上不可用，则由于电气原因，"故障" 位组合 `11`（`DEAD`）和 `00`（`BIST`）更可能出现。
+
+16 位带宽是一个折衷，目的是在返回值中提供冗余，对潜在的功率/EM 泄漏提供一些保护（通过 <<crypto_scalar_appx_es_crypto-cond>> 中讨论的 2:1 密码学调节进一步缓解），并希望在编程方便性上在 RV32 和 RV64 架构上所有位都 "在同一个地方"。
+
+===== (<<crypto_scalar_es_req_90b>>) NIST SP 800-90B
+
+SP 800-90C cite:[BaKeRo:21] 规定，每个 n 位的调节块需要 n+64 位输入熵才能达到完全熵。
+因此，NIST SP 800-90B cite:[TuBaKe:18] 最小熵评估必须保证每 256 位块至少 128 + 64 = 192 位输入熵（cite:[BaKeRo:21]，第 4.1 和 4.3.2 节）。
+只有这样，从熵源哈希的 16 * 16 = 256 位才能产生所需的 128 位完全熵。这是根据 SP 800-90C cite:[BaKeRo:21] 附录 A 中包含的具体要求、威胁模型和可区分性证明得出的。
+隐含的最小熵率为 192/256=12/16=0.75。预期的 Shannon 熵要大得多。
+
+在 FIPS 140-3 / SP 800-90 分类中，RBG2(P) 构造是一个具有连续访问物理熵源（`seed`）的密码学安全 RBG，并由完全播种的安全 DRBG 生成输出。
+熵源还可以用于构建 RBG3 完全熵源 cite:[BaKeRo:21]。输出字的连接对应于 `Get_ES_Bitstring` 函数。
+
+选择 128 位输出块大小是因为这是 cite:[TuBaKe:18] 附录 F 中指定的 CBC-MAC 调节器的输出大小，也是我们期望在应用中看到的最小密钥大小。
+
+如果选择 NIST SP 800-90B 认证，熵源应至少实现 cite:[TuBaKe:18] 第 4.4 节中定义的健康测试：重复计数测试和自适应比例测试，或证明供应商定义的测试将检测到相同的缺陷。
+
+===== (<<crypto_scalar_es_req_ptg2>>) BSI AIS-31
+
+PTG.2 是 BSI AIS 20/31 cite:[KiSc11] 中定义的安全性和功能性类别之一。PTG.2 源要求作为其他类型 BSI 生成器（例如，DRBG 或具有适当软件后处理的 PTG.3 TRNG）的构建块。
+
+为了验证目的，PTG.2 要求可以映射到安全控制 T1-3（<<crypto_scalar_es_security_controls>>）和接口，如下所示：
+
+* P1 *[PTG.2.1]* 启动测试映射到 T1 和复位触发的（按需）`BIST` 测试。
+* P2 *[PTG.2.2]* 连续测试总失败映射到 T2 和 `DEAD` 状态。
+* P3 *[PTG.2.3]* 在线测试是 T2 的连续测试 - 在 `BIST` 状态下禁止熵输出。
+* P4 *[PTG.2.4]* 与设计有效熵源健康测试相关，我们鼓励这样做。
+* P5 *[PTG.2.5]* 原始随机序列可以通过 GetNoise 接口（<<crypto_scalar_es_getnoise>>）检查。
+* P6 *[PTG.2.6]* 测试程序 A cite:[KiSc11]（第 2.4.4.1 节）是评估过程的一部分，我们建议即使不寻求 AIS-31 认证，也使用这些测试进行自我评估。
+* P7 *[PTG.2.7]* "内部随机位" 的平均 Shannon 熵超过 0.997。
+
+注意 P7 关注的是 Shannon 熵，而不是 NIST 源的最小熵。因此，还需要说明最小熵要求。
+根据 AIS-31 标准构建和认证的 PTG.2 模块也可以在 2:1 密码学调节后满足 "完全熵" 条件，但不一定如此。技术验证过程有所不同。
+
+===== (<<crypto_scalar_es_req_virt>>) 虚拟源
+
+所有不直接物理源（符合 SP 800-90B 或 AIS-31 PTG.2 要求）的源都需要满足虚拟熵源的安全要求。假设虚拟熵源不是限制性、共享带宽资源（而是软件 DRBG）。
+
+DRBG 可用于馈送其他（虚拟）DRBG，但这不会增加系统中的绝对熵量。
+熵源必须能够支持当前和未来的安全标准和应用。256 位要求映射到 NIST 后量子密码学的 "类别 5"（cite:[NI16] 中的 4.A.5 "安全强度类别"）和 Suite B 以及更新的美国政府 CNSA Suite cite:[NS15] 中的绝密方案。
+
+[[crypto_scalar_appx_es_access]]
+===== (<<crypto_scalar_es_access>>) 直接硬件访问的安全考虑
+
+ISA 实现和系统设计必须尽量确保硬件-软件接口最小化对手信息流的途径，即使规范中没有明确禁止。
+
+为了安全，虚拟化需要对物理熵输出进行调节和 DRBG 处理。如果单个物理熵源在多个不同的虚拟机之间共享，或者客户操作系统不受信任，建议这样做。虚拟熵源对耗尽攻击更具抵抗力，也减少了隐蔽通道的风险。
+
+直接 `mseccfg.[s,u]seed` 选项允许围绕组件绘制安全边界，以便与敏感安全参数（SSP）流相关，即使该组件不在 M 模式下。这在实现受信任的飞地时很有帮助。这样的模块可以强制整个密钥生命周期从生成（在熵源中）到销毁（清零）都在不将密钥传递给外部代码的情况下发生。
+
+*耗尽。*
+主动轮询可能会拒绝同时运行的另一个消费者使用熵源。例如，如果需要熵来完全初始化，这可能会延迟该虚拟机的实例化。
+
+*隐蔽通道。*
+直接访问组件（如熵源）可以用于跨越安全边界建立通信通道。一个消费者的主动轮询使资源对另一个（轮询不频繁的）不可用（WAIT 而不是 ES16）。这种交互可以用于建立低带宽通道。
+
+*硬件指纹识别。*
+熵源（及其噪声源电路）可能具有唯一可识别的硬件 "签名"。在某些应用中，这可能是无害的甚至有用的（因为随机源可能表现出类似物理不可克隆函数（PUF）的特性），但在其他应用中（匿名虚拟化环境和飞地）则是非常不希望的。DRBG 掩盖了这种统计特征。
+
+*侧信道。*
+一些对现实生活中密码系统最具破坏性的实际攻击使用了看似无关紧要的附加信息，如填充错误消息 cite:[BaFoKa:12] 或时间信息 cite:[MoSuEi:20]。
+
+我们敦促实现者不要通过状态或自定义位创建不必要的信息流，也不要允许任何其他机制禁用或影响熵源输出。所有信息流和交互机制都必须从对手的角度考虑：越少越好。
+
+作为侧信道分析的一个例子，我们注意到熵轮询接口通常不是 "恒定时间" 的。需要分析通过时间预言机揭示了什么样的信息；一种方法是将 `seed` 模型化为拒绝采样器。这样的时间预言机可以揭示有关噪声源类型和熵源使用的信息，但不能揭示随机输出 `entropy` 位本身的信息。如果确实如此，则需要额外的对策。
+
+[[crypto_scalar_es_security_controls]]
+==== 安全控制和健康测试
+
+密码学熵源的主要目的是生成秘密密钥材料。在几乎所有情况下，硬件熵源必须实现适当的 _安全控制_ 以保证不可预测性，防止泄漏，检测攻击，并拒绝对手对熵输出或其生成机制的控制。安全测试和认证需要明确的安全控制。
+
+内置于设备中的许多安全控制称为 "健康检查"。健康检查可以采取完整性检查、启动测试和按需测试的形式。这些测试可以在硬件或固件中实现，通常是两者兼有。NIST SP 800-90B cite:[NI19] 等标准要求进行几项测试。
+适当健康测试的选择取决于认证目标、系统架构、威胁模型、熵源类型和其他因素。
+
+健康检查不是为了硬件诊断，而是为了检测安全问题。因此，失败时的默认操作应旨在控制损害：限制进一步的输出并防止生成弱密码密钥。
+
+我们讨论了三个特定的测试要求 T1-T3。测试要求源于熵源的定义；没有它，模块只是一个噪声源，不能安全地生成密钥材料。
+
+===== T1：按需测试
+
+通过重置、重启或启动硬件（不是 ISA 信号）调用一系列简单测试。在初始启动自测试期间，实施将返回 `BIST`；在任何情况下，驱动程序必须等待它们完成后才能开始密码操作。失败时，熵源将进入无输出 `DEAD` 状态。
+
+*理由。*
+从软件方面与硬件自测试机制的交互应尽量减少；"按需" 一词并不意味着最终用户或应用程序应该能够在现场调用它们（该术语是对离散、非自主密码设备与人工操作员时代的回溯）。
+
+===== T2：连续检查
+
+如果在连续测试或环境传感器中检测到错误，熵源将进入无输出状态。
+我们定义，如果熵源从活动状态（`WAIT` 或 `ES16`）返回到 `BIST` 状态，则发出非关键警报。关键故障将立即导致 `DEAD` 状态。基于硬件的连续测试机制不得使统计信息外部可用，并且必须定期或通过重置、启动或类似信号按需清零。
+
+*理由。*
+物理攻击可能在设备运行时发生。设计应避免通过揭示详细状态信息来引导此类主动攻击。检测到攻击时，默认操作应旨在控制损害 - 防止生成弱密码密钥。
+
+某些测试的统计性质使 "1 型" 假阳性成为可能。可能还需要发出非致命警报；AIS 31 规定了 "噪声警报"，即使设备正常工作，也可能以非可忽略的概率触发；这些可以通过 `BIST` 发出信号。
+在无操作员的自主系统中，通常没有什么可以或应该对非致命警报条件采取措施。
+
+统计运行时健康检查（如计数器）的状态可能与某些秘密密钥材料相关，因此需要清零。
+
+===== T3：致命错误状态
+
+由于大多数密码操作的安全性取决于熵源，因此对于大多数熵源故障，系统范围的 "默认拒绝" 安全策略方法是适当的。硬件测试失败至少应导致 `DEAD` 状态，并可能导致重置/停止。
+这是一个阻止因素：如果不能保证其安全操作，则不得允许熵源（或其密码客户端应用程序）运行。
+
+*理由。*
+这些测试可以补充其他完整性和防篡改机制（参见 cite:[An20] 第 18 章的示例）。
+
+某些硬件随机生成器由于其物理结构，暴露于相对非对抗性的环境和制造问题。然而，即使是这样的 "无辜" 故障模式也可能表明 _故障攻击_ cite:[KaScVe13]，因此应作为系统完整性故障而不是诊断问题来处理。
+
+安全架构师将理解仅在测试阈值在整个设备生命周期内的假阳性概率可以忽略不计时，才使用永久或难以恢复的 "安全熔丝" 锁定。
+
+===== 信息流
+
+一些对现实生活中密码系统最具破坏性的实际攻击使用了看似无关紧要的附加信息，如填充错误消息 cite:[BaFoKa:12] 或时间信息 cite:[MoSuEi:20]。在密码学中，这种带外信息源称为 "预言机"。
+
+为了保证没有敏感数据被读取两次，并且不同的调用者不会获得相关输出，要求硬件在每次读取（成功轮询）期间在随机路径上实现 _读取即擦除_。出于同样的原因，只能通过 `entropy`（`seed` 的 ES16 状态）提供完整且完全处理的随机字。
+
+这也适用于原始噪声源。原始源接口已委托给可选的供应商特定测试接口。
+重要的是，测试接口和主接口不应同时运行。
+
+[quote, NIST SP 800-90B, Noise Source Requirements]
+噪声源状态应尽可能保护免受对手的了解或影响。用于此目的的方法应记录，包括（概念）安全边界在保护噪声源免受对手观察或影响中的作用。
+
+熵源是一个单一资源，受耗尽和隐蔽通道 cite:[EvPo16] 的影响。观察熵可能与观察噪声源输出相同，因为密码学调节仅作为后处理步骤是强制性的。
+SP 800-90B 和其他安全标准要求保护噪声位免受观察和影响。
+
+[[crypto_scalar_appx_es_implementation]]
+==== 实现策略
+
+作为一般规则，RISC-V 仅指定 ISA。我们提供一些额外的建议，以便可以创建可移植的、供应商无关的中间件和内核组件。实际的硬件实现和认证留给供应商和电路设计师；本节中的讨论纯粹是信息性的。
+
+在考虑实现选项和权衡时，必须查看整个信息流。
+
+. *噪声源* 从稳定且理解良好的物理随机事件中生成私有的、不可预测的信号。
+. *采样* 将噪声信号数字化为原始比特流。这些原始数据也需要设计保护。
+. *连续健康测试* 确保噪声源及其环境符合其操作参数。
+. *非密码学调节器* 去除输入噪声中的大部分偏差和相关性。
+. *密码学调节器* 生成完全熵输出，完全无法与理想随机区分。
+. *DRBG* 将 `>=256` 位种子熵作为密钥材料，并使用 "单向" 密码学过程快速生成按需比特（不泄露种子/状态）。
+
+步骤 1-4（可能还有 5）被视为熵源（ES）的一部分，并由 `seed` CSR 提供。
+添加软件端的密码学步骤 5-6 和控制逻辑将其补充为真正的随机数生成器（TRNG）。
+
+[[crypto_scalar_appx_es_noise_sources]]
+===== 环形振荡器
+
+我们将给出一些可以在处理器本身中实现的常见噪声源的示例（使用标准单元）。
+
+目前生产中最常见的熵源类型基于 "自由运行" 环形振荡器及其时序抖动。
+这里，奇数个反相器连接成一个环，从中根据参考时钟采样噪声源比特
+cite:[BaLuMi:11]。如果采样率适当低，采样的比特序列预计是相对不相关的（接近 IID）
+cite:[KiSc11]。然而，通常需要进一步处理。
+
+AMD cite:[AM17]、ARM cite:[AR17] 和 IBM cite:[LiBaBo:13] 是用于高安全性应用的环形振荡器 TRNG 的示例。
+
+还有一些相关的基于亚稳态的生成器设计，如过渡效应环形振荡器（TERO）cite:[VaDr10]。
+差分/反馈 Intel 构造 cite:[HaKoMa12] 略有不同，但也属于同一类基于亚稳态振荡器的类别。
+
+环形振荡器的主要优点是：（1）它们可以使用标准单元库实现，无需外部组件——甚至可以在 FPGA 上实现 cite:[VaFiAu:10]，（2）它们的行为有成熟的理论支持 cite:[HaLe98,HaLiLe99,BaLuMi:11]，（3）有大量先例可以在最高安全级别进行测试和认证。
+
+环形振荡器也有众所周知的实现陷阱。
+它们的输出有时高度依赖于温度，这必须在测试和建模中考虑。
+如果环形振荡器结构是并行化的，重要的是每个链中的级数和/或反相器数量适当，以避免由于谐波 "惠更斯同步" 引起的熵减少
+cite:[Ba86]。
+这种谐波也可以在频率注入攻击中恶意插入，这可能会产生灾难性结果 cite:[MaMo09]。
+对策与电路设计有关；环境传感器、电气滤波器和使用差分振荡器可能有帮助。
+
+===== 射击噪声
+
+一类由离散事件组成并建模为泊松过程的随机源称为 "射击噪声"。
+它们有长期的认证先例；AIS 31 文档 cite:[KiSc11] 本身提供了基于噪声二极管的参考设计。射击噪声源通常比环形振荡器更能抵抗温度变化。
+其中一些生成器也可以完全使用标准单元实现（Rambus / Inside Secure 通用 TRNG IP cite:[Ra20] 被描述为射击噪声生成器）。
+
+===== 其他类型的噪声
+
+可能可以认证更奇特的噪声源和设计，尽管它们的随机模型需要同样理解良好，并且它们的 CPU 接口必须是安全的。
+有关量子熵源的讨论，请参见 <<crypto_scalar_appx_es_quantum>>。
+
+[[crypto_scalar_appx_es_cont-tests]]
+===== 连续健康测试
+
+健康监测需要维护一些与噪声源相关的状态信息。测试应设计为特定数量的样本保证状态刷新（无挂起状态）。我们建议刷新大小 `W =< 1024` 以匹配 NIST SP 800-90B 所需的测试（见 cite:[TuBaKe:18] 第 4.4 节）。状态在系统重置时也会完全清零。
+
+可以用最少的电路构建两个强制性测试。
+不需要完整的直方图，只需简单的计数器寄存器：重复计数、窗口计数和样本计数。
+每次输出样本值变化时重置重复计数；如果计数达到某个截止限制，则发出噪声警报（`BIST`）或失败（`DEAD`）信号。窗口计数器用于保存每第 W 个输出（通常 `W` 在 { 512, 1024 } 中）。
+在接下来的窗口中计算此参考样本的频率；标准中定义了截止值。我们看到强制性测试的结构是这样的，如果实现良好，没有信息会超过 `W` 样本的限制。
+
+cite:[TuBaKe:18] 第 4.5 节明确允许额外的开发者定义测试，并且在 FIPS 140-1 的早期版本中定义了更多测试，然后被 "划掉"。额外测试的选择取决于物理源的性质和实现。
+
+特别是如果在硬件中使用非密码学调节器，可能由驱动程序软件实现 AIS 31 cite:[KiSc11] 在线测试。它们也可以在硬件中实现。
+对于某些安全配置文件，AIS 31 要求其容差设置为在 "正常使用" 下每年至少 10^-6^ 的警报概率。这样的要求在现代应用中是有问题的，因为它们的概率对于关键系统来说太高了。
+
+在无操作员的自主系统中，通常没有什么可以或应该对非致命警报条件采取措施。然而，AIS 31 允许 DRBG 组件在其熵源失败的情况下继续运行，因此我们建议重新进入临时 `BIST` 状态（<<crypto_scalar_es_security_controls>>）以发出非致命统计错误信号，如果需要这种（不可操作的）信号。
+驱动程序和应用程序可以适当地对此做出反应（或简单地记录它），但不会直接影响 TRNG 的可用性。
+永久错误条件应导致 `DEAD` 状态。
+
+[[crypto_scalar_appx_es_noncrypto]]
+===== 非密码学调节器
+
+如 <<crypto_scalar_appx_es_intro-cond>> 中所述，物理随机源通常需要一个称为 _调节_ 的后处理步骤，以满足 <<crypto_scalar_es_req>> 中概述的质量要求。
+
+此接口采用的方法是允许进行非密码学和密码学过滤的组合。第一阶段（硬件）仅需要能够将熵舒适地提炼到必要水平之上。
+
+* 可以从噪声源中获取一组比特并将它们进行异或以生成偏差较小（且更独立）的比特。
+  然而，这种异或可能引入 "伪随机性"，使输出难以分析。
+* von Neumann 提取器 cite:[Ne51] 查看连续的比特对，拒绝 00 和 11，并分别对 01 和 10 输出 0 或 1。它将比特数量减少到原来的不到 25%，但输出是可证明的无偏（假设独立性）。
+* Blum 提取器 cite:[Bl86] 可用于行为类似于 N 状态马尔可夫链的源。如果其假设成立，它还会去除依赖性，创建一个独立同分布（IID）源。
+* 其他线性和非线性校正器，如 Dichtl 和 Lacharme 讨论的那些 cite:[La08]。
+
+请注意，硬件也可以在熵源中实现完整的密码学调节器，即使软件驱动程序仍然需要密码学调节器（<<crypto_scalar_es_req>>）。
+
+*理由：*
+非密码学提取器的主要优点在于其能效、相对简单性和适合数学分析。如果设计良好，可以与噪声源本身的随机模型结合进行评估。
+它们不需要计算难度假设。
+
+[[crypto_scalar_appx_es_crypto-cond]]
+===== 密码学调节器
+
+为了安全使用，ISA 边界的软件端始终需要密码学调节器。如果需要，它们也可以在硬件端实现。在任何情况下，`entropy` ES16 输出在用作密钥材料或被视为 "完全熵" 之前，必须始终压缩 2:1（或更多）。
+
+密码学调节器的示例包括 Linux 操作系统的随机池、安全哈希函数（SHA-2/3、SHAKE cite:[nist:fips:202,nist:fips:180:4]）和附录 F 中的 AES / CBC-MAC 构造，SP 800-90B cite:[TuBaKe:18]。
+
+在某些构造中，如基于 Linux RNG 和 SHA-3/SHAKE cite:[nist:fips:202] 的生成器，密码学调节和输出（DRBG）生成由同一组件提供。
+
+*理由：*
+对于许多低功耗目标构造，Intel cite:[Me18] 和 AMD cite:[AM17] 使用的硬件 AES CBC-MAC 调节器类型将过于复杂和耗能，无法仅用于服务 `seed` CSR。
+另一方面，如果需要高质量的随机输出，较简单的非密码学调节器可能会对输入熵过于浪费——（ARM TrustZone TRBG cite:[AR17] 在 200 MHz 下仅输出 10Kbit/sec）。
+因此，在硬件和软件生成之间做出了节省资源的折衷。
+
+[[crypto_scalar_appx_es_drbgs]]
+===== 最终随机：DRBGs
+
+所有到达最终用户和应用程序的随机比特必须来自密码学 DRBG。这些通常由软件中的驱动程序组件实现。如果可用，应该使用 RISC-V AES 和 SHA 指令集扩展，因为它们提供了额外的安全功能，如时间攻击抵抗。
+
+目前推荐的 DRBG 定义在 NIST SP 800-90A（修订版 1）cite:[BaKe15] 中：`CTR_DRBG`、`Hash_DRBG` 和 `HMAC_DRBG`。
+认证通常需要对对称组件和 DRBG 整体进行已知答案测试（KATs）。这些在软件中实现比在硬件中要容易得多。除了直接可认证的 SP 800-90A DRBG，还可以使用基于 ChaCha20 cite:[Mu20] 的 Linux 风格随机池构造，或基于 SHAKE256 cite:[nist:fips:202] 的适当构造。
+
+这些只是建议；程序员可以调整 CPU 熵源的使用以满足未来的要求。
+
+[[crypto_scalar_appx_es_quantum]]
+===== 量子与经典随机
+
+[quote,U.K. NCSC QRNG Guidance, March 2020]
+NCSC 认为，经典 RNG 将继续满足我们对政府和军事应用的需求，在可预见的未来。
+
+量子随机数生成器（QRNG）是一种 TRNG，其随机源可以明确地识别为特定的量子现象，如量子态叠加、量子态纠缠、海森堡不确定性、量子隧穿、自发发射或放射性衰变 cite:[IT19]。
+
+直接量子熵在理论上是最好的熵类型。基于电子噪声的典型 TRNG 也主要基于量子现象，同样不可预测——区别在于，对于经典 TRNG，量子和经典物理学的相对量难以量化。
+
+QRNG 的设计方式允许对量子起源熵的量进行建模和估计。这一区别在 QKD（量子密钥分发）安全机制使用的安全模型中很重要，可以直接使用量子力学效应保护物理层（如光纤电缆）免受拦截。
+
+这种安全模型意味着许多可用的 QRNG 设备不使用密码学调节，可能无法满足密码学统计要求 cite:[HuHe20]。许多实现者可能将它们视为熵源。
+
+关于 QRNG 实现安全性的研究相对较少，但许多 QRNG 设计可以说比经典生成器（如环形振荡器）更容易泄漏，因为它们往往使用外部组件和混合材料。例如，光子探测器信号的放大可能在功率分析中可观察到，而经典基于噪声的源设计为抵抗这种情况。
+
+===== 后量子密码学
+
+PQC 公钥密码学标准 cite:[NI16] 不需要量子起源随机性，只需要足够安全的密钥材料。
+请记住，密码学旨在保护数据本身的机密性和完整性，不对物理通信通道（如 QKD）提出任何要求。
+
+经典的高质量 TRNG 非常适合生成 PQC 协议的秘密密钥，这些协议对量子计算机来说难以破解，但可以在经典计算机上实现。
+在密码学中，重要的是秘密密钥具有足够的真实随机性（熵），并且它们被安全地生成和存储。
+
+当然，必须避免基于量子计算机容易解决的问题的 DRBG，例如 Blum-Blum-Shub 生成器中的因子分解 cite:[Sh94]。
+大多数对称算法不受影响，因为最好的量子攻击仍然是指数级的密钥大小 cite:[Gr96]。
+
+例如，原始 Intel RNG cite:[Me18]，其输出生成基于 AES-128，可以使用 Grover 算法进行攻击，约为平方根努力 cite:[JaNaRo:20]。
+虽然即使 "64 位" 量子安全性也极难破解，但许多应用程序指定了更高的安全要求。
+NIST cite:[NI16] 将 AES-128 定义为 "类别 1" 等效后量子安全性，而 AES-256 是 "类别 5"（最高）。
+我们通过暴露对熵源的直接访问来避免这种可能的未来问题，熵源可以仅从信息理论假设中获得其安全性。
+
+[[crypto_scalar_es_getnoise]]
+
+==== 建议的 GetNoise 测试接口
+
+合规性测试、熵源的特性描述和配置需要访问原始、未经调节的噪声样本。此概念测试接口在 NIST SP 800-90B cite:[TuBaKe:18] 第 2.3.2 节中命名为 GetNoise。
+
+由于这种类型的接口对于安全测试是必要的，同时也构成了密码密钥生成过程的潜在后门，我们定义了一种安全行为，使合规实现可以在测试期间暂时禁用熵源 `seed` CSR 接口。
+
+为了使共享的 RISC-V 自我认证脚本（和驱动程序）能够以安全的方式适应测试接口，我们建议将其实现为自定义的、仅限 M 模式的 CSR，此处称为 `mnoise`。
+
+此非规范接口不打算用作随机性来源或其他生产用途。
+我们为此接口定义了一个单个位的语义，`mnoise[31]`，其名称为 `NOISE_TEST`，如果实现，将影响 `seed` 的行为。
+
+当 `mnoise` 中的 `NOISE_TEST = 1` 时，`seed` CSR 不得通过 `ES16` 返回任何内容；除非源是 `DEAD`，否则它应该处于 `BIST` 状态。当 `NOISE_TEST` 再次禁用时，熵源应通过适当的清零和自测试机制从 `BIST` 返回。
+
+其他输入和输出位的行为主要由供应商决定（因为它们取决于物理熵源的技术细节），自定义 `mnoise` CSR 的地址也是如此。只有在 `mvendorid`、`marchid` 和 `mimpid` CSR 标识符的上下文中才能解释 CSR 的其他内容和行为。
+
+当未实现时（例如，在虚拟机中），`mnoise` 可以永久读取零（`0x00000000`）并忽略写入。
+当可用但 `NOISE_TEST = 0` 时，`mnoise` 可以返回一个非零常量（例如 `0x00000001`），但没有噪声样本。
+
+[[crypto_scalar_es_noistest,reftext="自定义熵测试模式图"]]
+====
+image::es_noisetest.svg[title="在测试模式下无法读取熵源。", align="center",scaledwidth=66%]
+在 `NOISE_TEST` 模式下，WAIT 和 ES16 状态不可达，并且没有输出熵。建议不要实现直接影响 `seed` CSR 接口的 ES16 熵输出的测试接口。
+此类供应商测试接口已在攻击中被利用。例如，没有足够熵的 ECDSA cite:[nist:fips:186:4] 签名过程不仅会创建不安全的签名，还可能泄露秘密签名密钥，攻击者可以使用该密钥进行身份验证伪造。因此，即使是 `entropy` 安全性的临时失效也可能具有严重的安全影响。
+====
+
+[[crypto_scalar_appx_materials]]
+=== 补充材料
+
+虽然本文档包含 RISC-V 密码学扩展的规范，但还开发了许多补充材料和示例代码。
+所有与 RISC-V 密码学扩展相关的材料都位于 Github 存储库，地址为
+https://github.com/riscv/riscv-crypto
+
+* `doc/`
+  包含本文档的源代码。
+
+* `doc/supp/`
+  包含对软件和硬件实现者的补充信息和建议。
+
+* `benchmarks/`
+  示例软件实现。
+
+* `rtl/`
+  每个指令的示例 Verilog 实现。
+
+* `sail/`
+  Sail 中的正式模型实现。
+
+[[crypto_scalar_appx_sail]]
+=== 支持的 Sail 代码
+
+本节包含规范中指令描述引用的支持 Sail 代码。
+推荐阅读
+link:https://github.com/rems-project/sail/blob/sail2/manual.pdf[Sail 手册]
+以便最好地理解支持代码。
+
+[source,sail]
+----
+/* 用于执行 GF 乘法的辅助函数 */
+val xt2 : bits(8) -> bits(8)
+function xt2(x) = {
+  (x << 1) ^ (if bit_to_bool(x[7]) then 0x1b else 0x00)
+}
+
+val xt3 : bits(8) -> bits(8)
+function xt3(x) = x ^ xt2(x)
+
+/* 将 8 位字段元素乘以 4 位值，用于 AES MixCols 步骤 */
+val gfmul : (bits(8), bits(4)) -> bits(8)
+function gfmul( x, y) = {
+  (if bit_to_bool(y[0]) then             x    else 0x00) ^
+  (if bit_to_bool(y[1]) then xt2(        x)   else 0x00) ^
+  (if bit_to_bool(y[2]) then xt2(xt2(    x))  else 0x00) ^
+  (if bit_to_bool(y[3]) then xt2(xt2(xt2(x))) else 0x00)
+}
+
+/* 8 位到 32 位的部分 AES Mix Colum - 正向 */
+val aes_mixcolumn_byte_fwd : bits(8) -> bits(32)
+function aes_mixcolumn_byte_fwd(so) = {
+  gfmul(so, 0x3) @ so @ so @ gfmul(so, 0x2)
+}
+
+/* 8 位到 32 位的部分 AES Mix Colum - 逆向 */
+val aes_mixcolumn_byte_inv : bits(8) -> bits(32)
+function aes_mixcolumn_byte_inv(so) = {
+  gfmul(so, 0xb) @ gfmul(so, 0xd) @ gfmul(so, 0x9) @ gfmul(so, 0xe)
+}
+
+/* 32 位到 32 位的 AES 正向 MixColumn */
+val aes_mixcolumn_fwd : bits(32) -> bits(32)
+function aes_mixcolumn_fwd(x) = {
+  let s0 : bits (8) = x[ 7.. 0];
+  let s1 : bits (8) = x[15.. 8];
+  let s2 : bits (8) = x[23..16];
+  let s3 : bits (8) = x[31..24];
+  let b0 : bits (8) = xt2(s0) ^ xt3(s1) ^    (s2) ^    (s3);
+  let b1 : bits (8) =    (s0) ^ xt2(s1) ^ xt3(s2) ^    (s3);
+  let b2 : bits (8) =    (s0) ^    (s1) ^ xt2(s2) ^ xt3(s3);
+  let b3 : bits (8) = xt3(s0) ^    (s1) ^    (s2) ^ xt2(s3);
+  b3 @ b2 @ b1 @ b0 /* 返回值 */
+}
+
+/* 32 位到 32 位的 AES 逆向 MixColumn */
+val aes_mixcolumn_inv : bits(32) -> bits(32)
+function aes_mixcolumn_inv(x) = {
+  let s0 : bits (8) = x[ 7.. 0];
+  let s1 : bits (8) = x[15.. 8];
+  let s2 : bits (8) = x[23..16];
+  let s3 : bits (8) = x[31..24];
+  let b0 : bits (8) = gfmul(s0, 0xE) ^ gfmul(s1, 0xB) ^ gfmul(s2, 0xD) ^ gfmul(s3, 0x9);
+  let b1 : bits (8) = gfmul(s0, 0x9) ^ gfmul(s1, 0xE) ^ gfmul(s2, 0xB) ^ gfmul(s3, 0xD);
+  let b2 : bits (8) = gfmul(s0, 0xD) ^ gfmul(s1, 0x9) ^ gfmul(s2, 0xE) ^ gfmul(s3, 0xB);
+  let b3 : bits (8) = gfmul(s0, 0xB) ^ gfmul(s1, 0xD) ^ gfmul(s2, 0x9) ^ gfmul(s3, 0xE);
+  b3 @ b2 @ b1 @ b0 /* 返回值 */
+}
+
+/* 将轮数转换为 AES 的轮常数。请注意，AES64KS1I 指令定义为 r 参数始终在 0x0..0xA 范围内。范围外的 rnum 值不会解码为 AES64KS1I 指令。0xA 情况专门用于 AES-256 密钥调度，此函数在该情况下不会被调用。 */
+val aes_decode_rcon : bits(4) -> bits(32)
+function aes_decode_rcon(r) = {
+  assert(r <_u 0xA);
+  match r {
+    0x0 => 0x00000001,
+    0x1 => 0x00000002,
+    0x2 => 0x00000004,
+    0x3 => 0x00000008,
+    0x4 => 0x00000010,
+    0x5 => 0x00000020,
+    0x6 => 0x00000040,
+    0x7 => 0x00000080,
+    0x8 => 0x0000001b,
+    0x9 => 0x00000036,
+    _   => internal_error(__FILE__, __LINE__, "Unexpected AES r") /* 不可达 -- 需要静音 Sail 警告 */
+  }
+}
+
+/* SM4 SBox - 只有一个 SBox 用于正向和逆向 */
+let sm4_sbox_table : vector(256, bits(8)) = [
+0xD6, 0x90, 0xE9, 0xFE, 0xCC, 0xE1, 0x3D, 0xB7, 0x16, 0xB6, 0x14, 0xC2, 0x28,
+0xFB, 0x2C, 0x05, 0x2B, 0x67, 0x9A, 0x76, 0x2A, 0xBE, 0x04, 0xC3, 0xAA, 0x44,
+0x13, 0x26, 0x49, 0x86, 0x06, 0x99, 0x9C, 0x42, 0x50, 0xF4, 0x91, 0xEF, 0x98,
+0x7A, 0x33, 0x54, 0x0B, 0x43, 0xED, 0xCF, 0xAC, 0x62, 0xE4, 0xB3, 0x1C, 0xA9,
+0xC9, 0x08, 0xE8, 0x95, 0x80, 0xDF, 0x94, 0xFA, 0x75, 0x8F, 0x3F, 0xA6, 0x47,
+0x07, 0xA7, 0xFC, 0xF3, 0x73, 0x17, 0xBA, 0x83, 0x59, 0x3C, 0x19, 0xE6, 0x85,
+0x4F, 0xA8, 0x68, 0x6B, 0x81, 0xB2, 0x71, 0x64, 0xDA, 0x8B, 0xF8, 0xEB, 0x0F,
+0x4B, 0x70, 0x56, 0x9D, 0x35, 0x1E, 0x24, 0x0E, 0x5E, 0x63, 0x58, 0xD1, 0xA2,
+0x25, 0x22, 0x7C, 0x3B, 0x01, 0x21, 0x78, 0x87, 0xD4, 0x00, 0x46, 0x57, 0x9F,
+0xD3, 0x27, 0x52, 0x4C, 0x36, 0x02, 0xE7, 0xA0, 0xC4, 0xC8, 0x9E, 0xEA, 0xBF,
+0x8A, 0xD2, 0x40, 0xC7, 0x38, 0xB5, 0xA3, 0xF7, 0xF2, 0xCE, 0xF9, 0x61, 0x15,
+0xA1, 0xE0, 0xAE, 0x5D, 0xA4, 0x9B, 0x34, 0x1A, 0x55, 0xAD, 0x93, 0x32, 0x30,
+0xF5, 0x8C, 0xB1, 0xE3, 0x1D, 0xF6, 0xE2, 0x2E, 0x82, 0x66, 0xCA, 0x60, 0xC0,
+0x29, 0x23, 0xAB, 0x0D, 0x53, 0x4E, 0x6F, 0xD5, 0xDB, 0x37, 0x45, 0xDE, 0xFD,
+0x8E, 0x2F, 0x03, 0xFF, 0x6A, 0x72, 0x6D, 0x6C, 0x5B, 0x51, 0x8D, 0x1B, 0xAF,
+0x92, 0xBB, 0xDD, 0xBC, 0x7F, 0x11, 0xD9, 0x5C, 0x41, 0x1F, 0x10, 0x5A, 0xD8,
+0x0A, 0xC1, 0x31, 0x88, 0xA5, 0xCD, 0x7B, 0xBD, 0x2D, 0x74, 0xD0, 0x12, 0xB8,
+0xE5, 0xB4, 0xB0, 0x89, 0x69, 0x97, 0x4A, 0x0C, 0x96, 0x77, 0x7E, 0x65, 0xB9,
+0xF1, 0x09, 0xC5, 0x6E, 0xC6, 0x84, 0x18, 0xF0, 0x7D, 0xEC, 0x3A, 0xDC, 0x4D,
+0x20, 0x79, 0xEE, 0x5F, 0x3E, 0xD7, 0xCB, 0x39, 0x48
+]
+
+let aes_sbox_fwd_table : vector(256, bits(8)) = [
+0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe,
+0xd7, 0xab, 0x76, 0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4,
+0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0, 0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7,
+0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15, 0x04, 0xc7, 0x23, 0xc3,
+0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75, 0x09,
+0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3,
+0x2f, 0x84, 0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe,
+0x39, 0x4a, 0x4c, 0x58, 0xcf, 0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85,
+0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8, 0x51, 0xa3, 0x40, 0x8f, 0x92,
+0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2, 0xcd, 0x0c,
+0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19,
+0x73, 0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14,
+0xde, 0x5e, 0x0b, 0xdb, 0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2,
+0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79, 0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5,
+0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08, 0xba, 0x78, 0x25,
+0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86,
+0xc1, 0x1d, 0x9e, 0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e,
+0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf, 0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42,
+0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
+]
+
+let aes_sbox_inv_table : vector(256, bits(8)) = [
+0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81,
+0xf3, 0xd7, 0xfb, 0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e,
+0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb, 0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23,
+0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e, 0x08, 0x2e, 0xa1, 0x66,
+0x28, 0xd9, 0x24, 0xb2, 0x76, 0x5b, 0xa2, 0x49, 0x6d, 0x8b, 0xd1, 0x25, 0x72,
+0xf8, 0xf6, 0x64, 0x86, 0x68, 0x98, 0x16, 0xd4, 0xa4, 0x5c, 0xcc, 0x5d, 0x65,
+0xb6, 0x92, 0x6c, 0x70, 0x48, 0x50, 0xfd, 0xed, 0xb9, 0xda, 0x5e, 0x15, 0x46,
+0x57, 0xa7, 0x8d, 0x9d, 0x84, 0x90, 0xd8, 0xab, 0x00, 0x8c, 0xbc, 0xd3, 0x0a,
+0xf7, 0xe4, 0x58, 0x05, 0xb8, 0xb3, 0x45, 0x06, 0xd0, 0x2c, 0x1e, 0x8f, 0xca,
+0x3f, 0x0f, 0x02, 0xc1, 0xaf, 0xbd, 0x03, 0x01, 0x13, 0x8a, 0x6b, 0x3a, 0x91,
+0x11, 0x41, 0x4f, 0x67, 0xdc, 0xea, 0x97, 0xf2, 0xcf, 0xce, 0xf0, 0xb4, 0xe6,
+0x73, 0x96, 0xac, 0x74, 0x22, 0xe7, 0xad, 0x35, 0x85, 0xe2, 0xf9, 0x37, 0xe8,
+0x1c, 0x75, 0xdf, 0x6e, 0x47, 0xf1, 0x1a, 0x71, 0x1d, 0x29, 0xc5, 0x89, 0x6f,
+0xb7, 0x62, 0x0e, 0xaa, 0x18, 0xbe, 0x1b, 0xfc, 0x56, 0x3e, 0x4b, 0xc6, 0xd2,
+0x79, 0x20, 0x9a, 0xdb, 0xc0, 0xfe, 0x78, 0xcd, 0x5a, 0xf4, 0x1f, 0xdd, 0xa8,
+0x33, 0x88, 0x07, 0xc7, 0x31, 0xb1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xec, 0x5f,
+0x60, 0x51, 0x7f, 0xa9, 0x19, 0xb5, 0x4a, 0x0d, 0x2d, 0xe5, 0x7a, 0x9f, 0x93,
+0xc9, 0x9c, 0xef, 0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb,
+0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61, 0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6,
+0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d
+]
+
+/* 查找函数 - 获取索引和表，并检索该表的第 x 个元素。请注意，Sail 向量文字从索引 255 开始，向下到 0。 */
+val sbox_lookup : (bits(8), vector(256, bits(8))) -> bits(8)
+function sbox_lookup(x, table) = {
+  table[255 - unsigned(x)]
+}
+
+/* 执行正向 AES SBox 操作的简便函数。 */
+val aes_sbox_fwd : bits(8) -> bits(8)
+function aes_sbox_fwd(x) = sbox_lookup(x, aes_sbox_fwd_table)
+
+/* 执行逆向 AES SBox 操作的简便函数。 */
+val aes_sbox_inv : bits(8) -> bits(8)
+function aes_sbox_inv(x) = sbox_lookup(x, aes_sbox_inv_table)
+
+/* AES SubWord 函数用于密钥扩展
+ * - 将正向 sbox 应用于输入字中的每个字节。
+ */
+val aes_subword_fwd : bits(32) -> bits(32)
+function aes_subword_fwd(x) = {
+  aes_sbox_fwd(x[31..24]) @
+  aes_sbox_fwd(x[23..16]) @
+  aes_sbox_fwd(x[15.. 8]) @
+  aes_sbox_fwd(x[ 7.. 0])
+}
+
+/* AES 逆 SubWord 函数。
+ * - 将逆向 sbox 应用于输入字中的每个字节。
+ */
+val aes_subword_inv : bits(32) -> bits(32)
+function aes_subword_inv(x) = {
+  aes_sbox_inv(x[31..24]) @
+  aes_sbox_inv(x[23..16]) @
+  aes_sbox_inv(x[15.. 8]) @
+  aes_sbox_inv(x[ 7.. 0])
+}
+
+/* 执行 SM4 SBox 操作的简便函数。 */
+val sm4_sbox : bits(8) -> bits(8)
+function sm4_sbox(x) = sbox_lookup(x, sm4_sbox_table)
+
+val aes_get_column : (bits(128), nat) -> bits(32)
+function aes_get_column(state,c) = (state >> (to_bits(7, 32 * c)))[31..0]
+
+/* 64 位到 64 位函数，将 AES 正向 sbox 应用于 64 位字中的每个字节。 */
+val aes_apply_fwd_sbox_to_each_byte : bits(64) -> bits(64)
+function aes_apply_fwd_sbox_to_each_byte(x) = {
+  aes_sbox_fwd(x[63..56]) @
+  aes_sbox_fwd(x[55..48]) @
+  aes_sbox_fwd(x[47..40]) @
+  aes_sbox_fwd(x[39..32]) @
+  aes_sbox_fwd(x[31..24]) @
+  aes_sbox_fwd(x[23..16]) @
+  aes_sbox_fwd(x[15.. 8]) @
+  aes_sbox_fwd(x[ 7.. 0])
+}
+
+/* 64 位到 64 位函数，将 AES 逆向 sbox 应用于 64 位字中的每个字节。 */
+val aes_apply_inv_sbox_to_each_byte : bits(64) -> bits(64)
+function aes_apply_inv_sbox_to_each_byte(x) = {
+  aes_sbox_inv(x[63..56]) @
+  aes_sbox_inv(x[55..48]) @
+  aes_sbox_inv(x[47..40]) @
+  aes_sbox_inv(x[39..32]) @
+  aes_sbox_inv(x[31..24]) @
+  aes_sbox_inv(x[23..16]) @
+  aes_sbox_inv(x[15.. 8]) @
+  aes_sbox_inv(x[ 7.. 0])
+}
+
+/*
+ * AES 全轮转换函数。
+ */
+
+val getbyte : (bits(64), int) -> bits(8)
+function getbyte(x, i) = (x >> to_bits(6, i * 8))[7..0]
+
+val aes_rv64_shiftrows_fwd : (bits(64), bits(64)) -> bits(64)
+function aes_rv64_shiftrows_fwd(rs2, rs1) = {
+  getbyte(rs1, 3) @
+  getbyte(rs2, 6) @
+  getbyte(rs2, 1) @
+  getbyte(rs1, 4) @
+  getbyte(rs2, 7) @
+  getbyte(rs2, 2) @
+  getbyte(rs1, 5) @
+  getbyte(rs1, 0)
+}
+
+val aes_rv64_shiftrows_inv : (bits(64), bits(64)) -> bits(64)
+function aes_rv64_shiftrows_inv(rs2, rs1) = {
+  getbyte(rs2, 3) @
+  getbyte(rs2, 6) @
+  getbyte(rs1, 1) @
+  getbyte(rs1, 4) @
+  getbyte(rs1, 7) @
+  getbyte(rs2, 2) @
+  getbyte(rs2, 5) @
+  getbyte(rs1, 0)
+}
+
+/* 128 位到 128 位的 AES 正向 ShiftRows 转换的实现。
+ * 状态的字节 0 是输入列 0，位 7..0。
+ * 状态的字节 5 是输入列 1，位 15..8。
+ */
+val aes_shift_rows_fwd : bits(128) -> bits(128)
+function aes_shift_rows_fwd(x) = {
+  let ic3 : bits(32) = aes_get_column(x, 3);
+  let ic2 : bits(32) = aes_get_column(x, 2);
+  let ic1 : bits(32) = aes_get_column(x, 1);
+  let ic0 : bits(32) = aes_get_column(x, 0);
+  let oc0 : bits(32) = ic0[31..24] @ ic1[23..16] @ ic2[15.. 8] @ ic3[ 7.. 0];
+  let oc1 : bits(32) = ic1[31..24] @ ic2[23..16] @ ic3[15.. 8] @ ic0[ 7.. 0];
+  let oc2 : bits(32) = ic2[31..24] @ ic3[23..16] @ ic0[15.. 8] @ ic1[ 7.. 0];
+  let oc3 : bits(32) = ic3[31..24] @ ic0[23..16] @ ic1[15.. 8] @ ic2[ 7.. 0];
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 128 位到 128 位的 AES 逆向 ShiftRows 转换的实现。
+ * 状态的字节 0 是输入列 0，位 7..0。
+ * 状态的字节 5 是输入列 1，位 15..8。
+ */
+val aes_shift_rows_inv : bits(128) -> bits(128)
+function aes_shift_rows_inv(x) = {
+  let ic3 : bits(32) = aes_get_column(x, 3); /* 输入列 3 */
+  let ic2 : bits(32) = aes_get_column(x, 2);
+  let ic1 : bits(32) = aes_get_column(x, 1);
+  let ic0 : bits(32) = aes_get_column(x, 0);
+  let oc0 : bits(32) = ic0[31..24] @ ic3[23..16] @ ic2[15.. 8] @ ic1[ 7.. 0];
+  let oc1 : bits(32) = ic1[31..24] @ ic0[23..16] @ ic3[15.. 8] @ ic2[ 7.. 0];
+  let oc2 : bits(32) = ic2[31..24] @ ic1[23..16] @ ic0[15.. 8] @ ic3[ 7.. 0];
+  let oc3 : bits(32) = ic3[31..24] @ ic2[23..16] @ ic1[15.. 8] @ ic0[ 7.. 0];
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 将 AES 的正向子字节步骤应用于其状态的 128 位向量表示。 */
+val aes_subbytes_fwd : bits(128) -> bits(128)
+function aes_subbytes_fwd(x) = {
+  let oc0 : bits(32) = aes_subword_fwd(aes_get_column(x, 0));
+  let oc1 : bits(32) = aes_subword_fwd(aes_get_column(x, 1));
+  let oc2 : bits(32) = aes_subword_fwd(aes_get_column(x, 2));
+  let oc3 : bits(32) = aes_subword_fwd(aes_get_column(x, 3));
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 将 AES 的逆向子字节步骤应用于其状态的 128 位向量表示。 */
+val aes_subbytes_inv : bits(128) -> bits(128)
+function aes_subbytes_inv(x) = {
+  let oc0 : bits(32) = aes_subword_inv(aes_get_column(x, 0));
+  let oc1 : bits(32) = aes_subword_inv(aes_get_column(x, 1));
+  let oc2 : bits(32) = aes_subword_inv(aes_get_column(x, 2));
+  let oc3 : bits(32) = aes_subword_inv(aes_get_column(x, 3));
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 将 AES 的正向 MixColumns 步骤应用于其状态的 128 位向量表示。 */
+val aes_mixcolumns_fwd : bits(128) -> bits(128)
+function aes_mixcolumns_fwd(x) = {
+  let oc0 : bits(32) = aes_mixcolumn_fwd(aes_get_column(x, 0));
+  let oc1 : bits(32) = aes_mixcolumn_fwd(aes_get_column(x, 1));
+  let oc2 : bits(32) = aes_mixcolumn_fwd(aes_get_column(x, 2));
+  let oc3 : bits(32) = aes_mixcolumn_fwd(aes_get_column(x, 3));
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+
+/* 将 AES 的逆向 MixColumns 步骤应用于其状态的 128 位向量表示。 */
+val aes_mixcolumns_inv : bits(128) -> bits(128)
+function aes_mixcolumns_inv(x) = {
+  let oc0 : bits(32) = aes_mixcolumn_inv(aes_get_column(x, 0));
+  let oc1 : bits(32) = aes_mixcolumn_inv(aes_get_column(x, 1));
+  let oc2 : bits(32) = aes_mixcolumn_inv(aes_get_column(x, 2));
+  let oc3 : bits(32) = aes_mixcolumn_inv(aes_get_column(x, 3));
+  (oc3 @ oc2 @ oc1 @ oc0) /* 返回值 */
+}
+----
