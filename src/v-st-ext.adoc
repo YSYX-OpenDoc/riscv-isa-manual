@@ -2113,6 +2113,7 @@ in a scalar register, and the last might already be present if the
 following vector instruction needs a new SEW/LMUL. So, in best case
 only two instructions (of which only one performs vector operations) are needed to synthesize the effect of the
 dedicated instruction:
+
 ----
   csrr t0, vl                        # Save current vl (potentially not needed)
   vsetvli t1, x0, e8, m8, ta, ma     # Maximum VLMAX
