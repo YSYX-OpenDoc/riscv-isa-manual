@@ -190,7 +190,7 @@ include::v-st-ext_zh.adoc[]
 // include::mm-eplan_zh.adoc[]
 // include::mm-formal_zh.adoc[]
 //Appendices for Vector
-include::vector-examples_zh.adoc[]
+// include::vector-examples_zh.adoc[]
 include::calling-convention_zh.adoc[]
 //include::fraclmul.adoc[]
 //End of Vector appendices
