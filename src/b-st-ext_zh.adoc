@@ -1046,7 +1046,7 @@ let index = EXTZ(X(rs1)[31..0]);
 X(rd) = base + index;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1090,7 +1090,7 @@ andn _rd_, _rs1_, _rs2_
 X(rd) = X(rs1) & ~X(rs2);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1140,7 +1140,7 @@ let index = X(rs2) & (XLEN - 1);
 X(rd) = X(rs1) & ~(1 << index)
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1200,7 +1200,7 @@ let index = shamt & (XLEN - 1);
 X(rd) = X(rs1) & ~(1 << index)
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1247,7 +1247,7 @@ let index = X(rs2) & (XLEN - 1);
 X(rd) = (X(rs1) >> index) & 1;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1307,7 +1307,7 @@ let index = shamt & (XLEN - 1);
 X(rd) = (X(rs1) >> index) & 1;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1353,7 +1353,7 @@ let index = X(rs2) & (XLEN - 1);
 X(rd) = X(rs1) ^ (1 << index)
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1413,7 +1413,7 @@ let index = shamt & (XLEN - 1);
 X(rd) = X(rs1) ^ (1 << index)
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1459,7 +1459,7 @@ let index = X(rs2) & (XLEN - 1);
 X(rd) = X(rs1) | (1 << index)
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1483,7 +1483,7 @@ let index = shamt & (XLEN - 1);
 X(rd) = X(rs1) | (1 << index)
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |Extension
@@ -1537,7 +1537,7 @@ foreach (i from 0 to (xlen - 1) by 1) {
 X[rd] = output
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |Extension
@@ -1595,7 +1595,7 @@ foreach (i from 1 to xlen by 1) {
 X[rd] = output
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |Extension
@@ -1661,7 +1661,7 @@ X[rd] = output
 指令助记符中的*r*代表_反向_，因为该指令相当于对输入进行位反转，执行*clmul*，然后对输出进行位反转。
 ===============================================================
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |Extension
@@ -1714,7 +1714,7 @@ let rs = X(rs);
 X[rd] = (xlen - 1) - HighestSetBit(rs);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |Extension
@@ -1768,7 +1768,7 @@ let rs = X(rs);
 X[rd] = 31 - HighestSetBit(rs);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |Extension
@@ -1826,7 +1826,7 @@ GCC内置函数`+__builtin_popcount (unsigned int x)+`在RV32上由cpop实现，
 GCC内置函数`+__builtin_popcountl (unsigned long x)+`用于LP64在RV64上由*cpop*实现。
 ===============================================================
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |Extension
@@ -1875,7 +1875,7 @@ foreach (i from 0 to 31 in inc)
 X[rd] = bitcount
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |Extension
@@ -1929,7 +1929,7 @@ let rs = X(rs);
 X[rd] = LowestSetBit(rs);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -1982,7 +1982,7 @@ let rs = X(rs);
 X[rd] = LowestSetBit32(rs);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2039,7 +2039,7 @@ X(rd) = result;
 计算有符号整数的绝对值可以通过以下序列进行：*neg rD,rS*，然后是*max rD,rS,rD*。在使用此常见序列时，建议它们在没有中间指令的情况下进行调度，以便经过优化的实现可以将它们融合在一起。
 ===============================================================
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2090,7 +2090,7 @@ let result = if   rs1_val <_u rs2_val
 X(rd) = result;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2141,7 +2141,7 @@ let result = if   rs1_val <_s rs2_val
 X(rd) = result;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2192,7 +2192,7 @@ let result = if   rs1_val <_u rs2_val
 X(rd) = result;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2245,7 +2245,7 @@ foreach (i from 0 to (xlen - 8) by 8) {
 X[rd] = output;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2289,7 +2289,7 @@ orn _rd_, _rs1_, _rs2_
 X(rd) = X(rs1) | ~X(rs2);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2339,7 +2339,7 @@ let hi_half : bits(xlen/2) = X(rs2)[xlen/2-1..0];
 X(rd) = EXTZ(hi_half @ lo_half);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2385,7 +2385,7 @@ let hi_half : bits(8) = X(rs2)[7..0];
 X(rd) = EXTZ(hi_half @ lo_half);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2433,7 +2433,7 @@ let hi_half : bits(16) = X(rs2)[15..0];
 X(rd) = EXTS(hi_half @ lo_half);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2509,7 +2509,7 @@ X[rd] = output
 字节反转操作仅适用于整个寄存器宽度。要模拟字大小和半字大小的字节反转，执行`rev8 rd,rs`，然后执行`srai rd,rd,K`，其中K分别为XLEN-32和XLEN-16。
 ===============================================================
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2560,7 +2560,7 @@ foreach (i from 0 to sizeof(xlen) by 8) {
 X(rd) = result;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2609,7 +2609,7 @@ let result = (X(rs1) << shamt) | (X(rs1) >> (xlen - shamt));
 X(rd) = result;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2660,7 +2660,7 @@ let result = (rs1 << shamt) | (rs1 >> (32 - shamt));
 X(rd) = EXTS(result[31..0]);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2713,7 +2713,7 @@ let result = (X(rs1) >> shamt) | (X(rs1) << (xlen - shamt));
 X(rd) = result;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2779,7 +2779,7 @@ let result = (X(rs1) >> shamt) | (X(rs1) << (xlen - shamt));
 X(rd) = result;
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2829,7 +2829,7 @@ let result = (rs1_data >> shamt) | (rs1_data << (32 - shamt));
 X(rd) = EXTS(result[31..0]);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2880,7 +2880,7 @@ let result = (rs1 >> shamt) | (rs1 << (32 - shamt));
 X(rd) = EXTS(result);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2928,7 +2928,7 @@ sext.b _rd_, _rs_
 X(rd) = EXTS(X(rs)[7..0]);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -2972,7 +2972,7 @@ sext.h _rd_, _rs_
 X(rd) = EXTS(X(rs)[15..0]);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3017,7 +3017,7 @@ sh1add _rd_, _rs1_, _rs2_
 X(rd) = X(rs2) + (X(rs1) << 1);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3067,7 +3067,7 @@ let index = EXTZ(X(rs1)[31..0]);
 X(rd) = base + (index << 1);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3111,7 +3111,7 @@ sh2add _rd_, _rs1_, _rs2_
 X(rd) = X(rs2) + (X(rs1) << 2);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3160,7 +3160,7 @@ let index = EXTZ(X(rs1)[31..0]);
 X(rd) = base + (index << 2);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3204,7 +3204,7 @@ sh3add _rd_, _rs1_, _rs2_
 X(rd) = X(rs2) + (X(rs1) << 3);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3251,7 +3251,7 @@ let index = EXTZ(X(rs1)[31..0]);
 X(rd) = base + (index << 3);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3295,7 +3295,7 @@ slli.uw _rd_, _rs1_, _shamt_
 X(rd) = (EXTZ(X(rs)[31..0]) << shamt);
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3356,7 +3356,7 @@ foreach (i from 0 to xlen/2-1) {
 此指令对于在32位架构上实现SHA3加密哈希函数非常有用，因为它实现了用于加速64位旋转的位交错操作。
 ===============================================================
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3400,7 +3400,7 @@ xnor _rd_, _rs1_, _rs2_
 X(rd) = ~(X(rs1) ^ X(rs2));
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3465,7 +3465,7 @@ function clause execute ( XPERM_B (rs2,rs1,rd)) = {
 }
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3526,7 +3526,7 @@ function clause execute ( XPERM_N (rs2,rs1,rd)) = {
 }
 --
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3589,7 +3589,7 @@ X(rd) = EXTZ(X(rs)[15..0]);
 *zext.h* 助记符在 RV32 和 RV64 中对应不同的指令编码。
 ===============================================================
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展
@@ -3644,7 +3644,7 @@ foreach (i from 0 to xlen/2-1) {
 此指令对于在 32 位架构上实现 SHA3 加密哈希函数非常有用，因为它实现了用于加速 64 位旋转的位交错操作。
 ===============================================================
 
-包含在::
+包含于::
 [%header,cols="4,2,2"]
 |===
 |扩展

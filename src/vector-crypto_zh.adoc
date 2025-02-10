@@ -57,7 +57,7 @@ link:https://github.com/riscv/sail-riscv[正式模型]
 
 我们本打算在本规范中包含实际的 Sail 代码。
 然而，向量加密 Sail 模型需要向量 Sail 模型作为构建基础。此向量加密扩展规范在有批准的 RISC-V 向量 Sail 模型之前已完成。
-因此，我们没有任何 Sail 代码可以包含在指令描述中。相反，我们包含了类似 Sail 的伪代码。虽然我们努力遵守 Sail 语法，但为了简洁起见，我们在某些地方做了一些调整，我们相信读者可以清楚地理解我们的意图。
+因此，我们没有任何 Sail 代码可以包含于指令描述中。相反，我们包含了类似 Sail 的伪代码。虽然我们努力遵守 Sail 语法，但为了简洁起见，我们在某些地方做了一些调整，我们相信读者可以清楚地理解我们的意图。
 
 [NOTE]
 ====
@@ -68,7 +68,7 @@ link:https://github.com/riscv/sail-riscv[正式模型]
 为了简洁起见，我们的伪代码不包括掩码或尾元素的处理。我们遵循 *RISC-V "V" 向量扩展* 规范中描述的_不受干扰_和_不可知_策略。此外，代码没有明确处理重叠和 SEW 约束；这些在文本中明确说明。
 
 在许多情况下，伪代码包括
-调用支持函数，这些函数过于冗长，无法直接包含在规范中。
+调用支持函数，这些函数过于冗长，无法直接包含于规范中。
 这些支持代码列在
 <<crypto_vector_appx_sail>>。
 
@@ -1005,7 +1005,7 @@ DIEL 并不打算保密软件（以及其中包含的加密算法），因为假
 [[insns-vaesdf, 向量 AES 解密最终轮]]
 ==== vaesdf.[vv,vs]
 
-概要::
+简述::
 向量 AES 最终轮解密
 
 助记符::
@@ -1104,7 +1104,7 @@ function clause execute (VAESDF(vs2, vd, suffix)) = {
 [[insns-vaesdm, Vector AES decrypt middle round]]
 ==== vaesdm.[vv,vs]
 
-概要::
+简述::
 向量 AES 中间轮解密
 
 助记符::
@@ -1202,7 +1202,7 @@ function clause execute (VAESDM(vs2, vd, suffix)) = {
 [[insns-vaesef, Vector AES encrypt final round]]
 ==== vaesef.[vv,vs]
 
-概要::
+简述::
 向量 AES 最终轮加密
 
 助记符::
@@ -1299,7 +1299,7 @@ function clause execute (VAESEF(vs2, vd, suffix) = {
 [[insns-vaesem, Vector AES encrypt middle round]]
 ==== vaesem.[vv,vs]
 
-概要::
+简述::
 向量 AES 中间轮加密
 
 助记符::
@@ -1398,7 +1398,7 @@ function clause execute (VAESEM(vs2, vd, suffix)) = {
 [[insns-vaeskf1, Vector AES-128 Forward KeySchedule]]
 ==== vaeskf1.vi
 
-概要::
+简述::
 向量 AES-128 前向密钥调度生成
 
 助记符::
@@ -1491,7 +1491,7 @@ function clause execute (VAESKF1(rnd, vd, vs2)) = {
 [[insns-vaeskf2, Vector AES-256 Forward KeySchedule]]
 ==== vaeskf2.vi
 
-概要::
+简述::
 向量 AES-256 前向密钥调度生成
 
 助记符::
@@ -1586,7 +1586,7 @@ function clause execute (VAESKF2(rnd, vd, vs2)) = {
 [[insns-vaesz, Vector AES round zero]]
 ==== vaesz.vs
 
-概要::
+简述::
 向量 AES 零轮加密/解密
 
 助记符::
@@ -1669,7 +1669,7 @@ function clause execute (VAESZ(vs2, vd) = {
 [[insns-vandn, Vector And-Not]]
 ==== vandn.[vv,vx]
 
-概要::
+简述::
 按位与非
 
 助记符::
@@ -1777,7 +1777,7 @@ Included in::
 [[insns-vbrev, 向量反转元素中的位]]
 ==== vbrev.v
 
-概要::
+简述::
 向量反转元素中的位
 
 助记符::
@@ -1837,7 +1837,7 @@ function clause execute (VBREV(vs2)) = {
 [[insns-vbrev8, 向量反转字节中的位]]
 ==== vbrev8.v
 
-概要::
+简述::
 向量反转字节中的位
 
 助记符::
@@ -1903,7 +1903,7 @@ function clause execute (VBREV8(vs2)) = {
 [[insns-vclmul, 向量无进位乘法]]
 ==== vclmul.[vv,vx]
 
-概要::
+简述::
 向量无进位乘法（返回乘积的低半部分）
 
 助记符::
@@ -1998,7 +1998,7 @@ function clmul(x, y, width) = {
 [[insns-vclmulh, 向量无进位乘法返回高半部分]]
 ==== vclmulh.[vv,vx]
 
-概要::
+简述::
 向量无进位乘法（返回乘积的高半部分）
 
 助记符::
@@ -2087,7 +2087,7 @@ function clmulh(x, y, width) = {
 [[insns-vclz, 向量前导零计数]]
 ==== vclz.v
 
-概要::
+简述::
 向量前导零计数
 
 助记符::
@@ -2146,7 +2146,7 @@ function clause execute (VCLZ(vs2)) = {
 [[insns-vcpop, 向量人口计数]]
 ==== vcpop.v
 
-概要::
+简述::
 计算每个元素中设置的位数
 
 助记符::
@@ -2204,7 +2204,7 @@ function clause execute (VCPOP(vs2)) = {
 [[insns-vctz, 向量尾随零计数]]
 ==== vctz.v
 
-概要::
+简述::
 向量尾随零计数
 
 助记符::
@@ -2263,7 +2263,7 @@ function clause execute (VCTZ(vs2)) = {
 [[insns-vghsh, 向量 GHASH 加-乘]]
 ==== vghsh.vv
 
-概要::
+简述::
 在 GHASH Galois-Field 上进行向量加-乘
 
 助记符::
@@ -2377,7 +2377,7 @@ function clause execute (VGHSH(vs2, vs1, vd)) = {
 [[insns-vgmul, 向量 GHASH 乘法]]
 ==== vgmul.vv
 
-概要::
+简述::
 在 GHASH Galois-Field 上进行向量乘法
 
 助记符::
@@ -2488,7 +2488,7 @@ function clause execute (VGMUL(vs2, vs1, vd)) = {
 [[insns-vrev8, 向量反转字节]]
 ==== vrev8.v
 
-概要::
+简述::
 向量反转字节
 
 助记符::
@@ -2557,7 +2557,7 @@ function clause execute (VREV8(vs2)) = {
 [[insns-vrol, 向量左旋]]
 ==== vrol.[vv,vx]
 
-概要::
+简述::
 向量按向量/标量左旋
 
 助记符::
@@ -2665,7 +2665,7 @@ function clause execute (VROL_VX(vs2, rs1, vd)) = {
 [[insns-vror, 向量右旋]]
 ==== vror.[vv,vx,vi]
 
-概要::
+简述::
 向量按向量/标量/立即数右旋
 
 助记符::
@@ -2794,7 +2794,7 @@ Included in::
 [[insns-vsha2c, 向量 SHA-2 压缩]]
 ==== vsha2c[hl].vv
 
-概要::
+简述::
 向量 SHA-2 两轮压缩
 
 助记符::
@@ -2953,7 +2953,7 @@ function ROTR(x,n) = (x >> n) | (x << SEW - n)
 [[insns-vsha2ms, 向量 SHA-2 消息调度]]
 ==== vsha2ms.vv
 
-概要::
+简述::
 向量 SHA-2 消息调度
 
 助记符::
@@ -3078,7 +3078,7 @@ function SHR (x,n) = x >> n
 [[insns-vsm3c, SM3 压缩]]
 ==== vsm3c.vi
 
-概要::
+简述::
 向量 SM3 压缩
 
 助记符::
@@ -3260,7 +3260,7 @@ function P_0(X) = ((X) ^ ROL32((X),  9) ^ ROL32((X), 17))
 [[insns-vsm3me, SM3 消息扩展]]
 ==== vsm3me.vv
 
-概要::
+简述::
 向量 SM3 消息扩展
 
 助记符::
@@ -3403,7 +3403,7 @@ function clause execute (VSM3ME(vs2, vs1)) = {
 [[insns-vsm4k, 向量 SM4 密钥扩展]]
 ==== vsm4k.vi
 
-概要::
+简述::
 向量 SM4 密钥扩展
 
 助记符::
@@ -3607,7 +3607,7 @@ let ck : list(bits(32)) = [|
 [[insns-vsm4r, SM4 块密码轮次]]
 ==== vsm4r.[vv,vs]
 
-概要::
+简述::
 向量 SM4 轮次
 
 助记符::
@@ -3756,7 +3756,7 @@ function sm4_round(X, S) = \
 [[insns-vwsll, 向量宽移位左逻辑]]
 ==== vwsll.[vv,vx,vi]
 
-概要::
+简述::
 向量宽移位左逻辑（按向量/标量/立即数）。
 
 助记符::
