@@ -1,6 +1,6 @@
 # RISC-V Instruction Set Manual
 
-[![RISC-V ISA Build](https://github.com/till-sat/riscv-isa-manual/actions/workflows/isa-build.yml/badge.svg)](https://github.com/till-sat/riscv-isa-manual/actions/workflows/isa-build.yml)
+[![RISC-V ISA Build](https://github.com/YSYX-OpenDoc/riscv-isa-manual/actions/workflows/isa-build.yml/badge.svg)](https://github.com/YSYX-OpenDoc/riscv-isa-manual/actions/workflows/isa-build.yml)
 
 This repository contains the source files for the RISC-V Instruction Set Manual, which consists of the Privileged RISC-V Instruction Set Manual (LaTeX) and the Unprivileged RISC-V Instruction Set Manual (AsciiDoc). The preface of each document indicates the version of each standard that has been formally ratified by RISC-V International.
 
