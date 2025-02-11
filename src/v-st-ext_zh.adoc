@@ -1273,7 +1273,7 @@ NOTE: 索引操作的助记符使用了 "U" 或 "O" 来区分无序和有序，�
 ----
 使用单位步长故障只对首个元素生效的指令的 strlen 示例
 
-include::example/strlen.s[lines=4..-1]
+include::example/strlen_zh.s[lines=4..-1]
 ----
 
 NOTE: 故障只对首个元素生效的加载指令存在安全隐患，因为它们可以用来探测有效的地址。单位步长版本只允许探测
