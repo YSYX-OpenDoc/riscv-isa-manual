@@ -408,7 +408,7 @@ NOTE:  可以通过单个 csrwi 指令在保存原始舍入模式的同时设置
 | 1 | 1 | rod | 取整到奇数 (OR bits into LSB, aka "jam")   | `!v[d] & v[d-1:0]{ne}0`
 |===
 
-取整功能:
+ 取整功能:
 ----
 roundoff_unsigned(v, d) = (unsigned(v) >> d) + r
 roundoff_signed(v, d) = (signed(v) >> d) + r
@@ -2777,20 +2777,20 @@ vmfge 在输入为信号 NaN 或安静 NaN 时都触发无效操作异常。vmfn
 ----
 
 ----
-Comparison      Assembler Mapping             Assembler pseudoinstruction
-
-va < vb         vmflt.vv vd, va, vb, vm
-va <= vb        vmfle.vv vd, va, vb, vm
-va > vb         vmflt.vv vd, vb, va, vm    vmfgt.vv vd, va, vb, vm
-va >= vb        vmfle.vv vd, vb, va, vm    vmfge.vv vd, va, vb, vm
-
-va < f          vmflt.vf vd, va, f, vm
-va <= f         vmfle.vf vd, va, f, vm
-va > f          vmfgt.vf vd, va, f, vm
-va >= f         vmfge.vf vd, va, f, vm
-
-va, vb vector register groups
-f      scalar floating-point register
+    Comparison      Assembler Mapping             Assembler pseudoinstruction
+    
+    va < vb         vmflt.vv vd, va, vb, vm
+    va <= vb        vmfle.vv vd, va, vb, vm
+    va > vb         vmflt.vv vd, vb, va, vm    vmfgt.vv vd, va, vb, vm
+    va >= vb        vmfle.vv vd, vb, va, vm    vmfge.vv vd, va, vb, vm
+    
+    va < f          vmflt.vf vd, va, f, vm
+    va <= f         vmfle.vf vd, va, f, vm
+    va > f          vmfgt.vf vd, va, f, vm
+    va >= f         vmfge.vf vd, va, f, vm
+    
+    va, vb vector register groups
+    f      scalar floating-point register
 ----
 
 NOTE: 提供所有形式的比较指令对于正确处理 NaN 的无序比较是必要的。
@@ -2842,7 +2842,7 @@ vfmv.v.f vd, rs1  # vd[i] = f[rs1]
 
 NOTE: vfmv.v.f 指令与 vfmerge.vfm 指令共享编码，但其 vm=1 且 vs2=v0。
 
-====单宽浮点/整数类型转换指令
+==== 单宽浮点/整数类型转换指令
 
 提供了转换操作，用于在浮点值和无符号/有符号整数之间进行转换，源和目标均为 SEW 宽度。
 
@@ -3648,7 +3648,7 @@ NOTE: 虽然可能，但 `vcompress` 是少数几个较难在非零 `vstart` 的
    e q r d c b v a    # v11 destination after vrgather using viota.m under mask
 ----
 
-====整个向量寄存器移动
+==== 整个向量寄存器移动
 
 vmv<nr>r.v 指令复制整个向量寄存器（即，所有 VLEN 位），并且可以复制整个向量寄存器组。操作码中的 nr 值指定要复制的
 独立向量寄存器的数量，即 NREG。指令的操作方式就像是 EEW=SEW，EMUL = NREG，实际长度 evl= EMUL * VLEN/SEW。
