@@ -84,7 +84,7 @@ pred RISCV_mm { LoadValue and Atomicity /* and Progress */ }
 .Alloy 中形式化的 RVWMO 内存模型 (3/5: 内存模型)
 [source,sml]
 ....
-//内存的基本模型
+// 内存的基本模型
 
 sig Hart {  // 硬件线程
   start : one Event
@@ -191,12 +191,12 @@ fact { acyclic[po] }
 // gmo
 fact { total[^gmo, MemoryEvent] } // gmo 是所有 MemoryEvent 的全序
 
-//rf
+// rf
 fact { rf.~rf in iden } // 每次读取仅返回一个写入的值
 fact { rf in Store <: address.~address :> Load }
 fun rfi : MemoryEvent->MemoryEvent { rf & (*po + *~po) }
 
-//dep
+// dep
 fact { no StoreNormal <: (addrdep + ctrldep + datadep) }
 fact { addrdep + ctrldep + datadep + pair in ^po }
 fact { datadep in datadep :> Store }
@@ -270,7 +270,7 @@ let fence.tso =
   let f = fencerel(Fence.tso) in
   ([W];f;[W]) | ([R];f;[M])
 
-let fence = 
+let fence =
   fence.r.r | fence.r.w | fence.r.rw |
   fence.w.r | fence.w.w | fence.w.rw |
   fence.rw.r | fence.rw.w | fence.rw.rw |
@@ -396,35 +396,35 @@ empty rmw & (fre;coe) as Atomic
 
 操作表示涵盖混合大小执行，可能重叠的不同 2 的幂字节大小的内存访问。未对齐的访问被分解为单字节访问。
 
-操作模型与 RISC-V ISA 语义（RV64I 和 A 的一个片段）集成到 `rmem` 探索工具中  
-(https://github.com/rems-project/rmem)。`rmem` 可以对一致性测试  
-(见 <<litmustests>>) 和小型 ELF 二进制文件进行穷举、伪随机以及交互式探索。  
-在 `rmem` 中，ISA 语义由 Sail 显式表达  
-(参见 https://github.com/rems-project/sail 了解 Sail 语言，  
-以及 https://github.com/rems-project/sail-riscv 了解 RISC-V ISA 模型)，  
-并且并发语义由 Lem 表达 (参见 https://github.com/rems-project/lem 了解 Lem 语言)。  
+操作模型与 RISC-V ISA 语义（RV64I 和 A 的一个片段）集成到 `rmem` 探索工具中
+(https://github.com/rems-project/rmem)。`rmem` 可以对一致性测试
+(见 <<litmustests>>) 和小型 ELF 二进制文件进行穷举、伪随机以及交互式探索。
+在 `rmem` 中，ISA 语义由 Sail 显式表达
+(参见 https://github.com/rems-project/sail 了解 Sail 语言，
+以及 https://github.com/rems-project/sail-riscv 了解 RISC-V ISA 模型)，
+并且并发语义由 Lem 表达 (参见 https://github.com/rems-project/lem 了解 Lem 语言)。
 
-`rmem` 提供命令行接口和 Web 界面。  
-Web 界面完全在客户端运行，并在线提供，同时附带一套一致性测试库：  
-http://www.cl.cam.ac.uk/。命令行接口比 Web 界面更快，  
-特别是在穷举模式下。  
+`rmem` 提供命令行接口和 Web 界面。
+Web 界面完全在客户端运行，并在线提供，同时附带一套一致性测试库：
+http://www.cl.cam.ac.uk/。命令行接口比 Web 界面更快，
+特别是在穷举模式下。
 
-下面是对模型状态和转换的非正式介绍。  
-正式模型的描述将在下一小节开始。  
+下面是对模型状态和转换的非正式介绍。
+正式模型的描述将在下一小节开始。
 
-术语：与公理化表示不同，此处的每个内存操作要么是加载（load），要么是存储（store）。  
-因此，原子内存操作（AMO）会引发两个独立的内存操作：一个加载和一个存储。  
-当与 `instruction` 结合使用时，术语 `load` 和 `store` 指的是  会产生此类内存操作的指令。因此，它们包括 AMO 指令。  
-术语 `acquire` 指带有 acquire-RCpc 或 acquire-RCsc 注释的指令（或其内存操作）。  
+术语：与公理化表示不同，此处的每个内存操作要么是加载（load），要么是存储（store）。
+因此，原子内存操作（AMO）会引发两个独立的内存操作：一个加载和一个存储。
+当与 `instruction` 结合使用时，术语 `load` 和 `store` 指的是  会产生此类内存操作的指令。因此，它们包括 AMO 指令。
+术语 `acquire` 指带有 acquire-RCpc 或 acquire-RCsc 注释的指令（或其内存操作）。
 术语 `release` 指带有 release-RCpc 或 release-RCsc 注释的指令（或其内存操作）。
 
-*模型状态*  
+*模型状态*
 
-模型状态：一个模型状态由共享内存和一组硬件线程状态组成。  
+模型状态：一个模型状态由共享内存和一组硬件线程状态组成。
 
 ["ditaa",shadows=false, separation=false, fontsize: 14,float="center"]
 ....
-+----------+     +---------+ 
++----------+     +---------+
 |  Hart 0  | ... |  Trace  |
 +----------+     +---------+
    ↑     ↓         ↑     ↓
@@ -443,76 +443,76 @@ http://www.cl.cam.ac.uk/。命令行接口比 Web 界面更快，
 //2+|共享内存
 //|===
 
-共享内存状态记录了所有已经传播的存储操作，  
-并按照传播顺序进行存储（可以优化这一点，但为了便于讲解，我们保持这种方式）。  
+共享内存状态记录了所有已经传播的存储操作，
+并按照传播顺序进行存储（可以优化这一点，但为了便于讲解，我们保持这种方式）。
 
-每个硬件线程状态主要由指令实例树组成，其中一些已经 _完成_，而另一些尚未完成。  
-未完成的指令实例可能会被 _重新启动_，例如当它们依赖于乱序执行或推测执行的加载操作，  
-而这些加载操作最终被判定为无效时。  
+每个硬件线程状态主要由指令实例树组成，其中一些已经 _完成_，而另一些尚未完成。
+未完成的指令实例可能会被 _重新启动_，例如当它们依赖于乱序执行或推测执行的加载操作，
+而这些加载操作最终被判定为无效时。
 
-条件分支和间接跳转指令可能在指令树中有多个后继节点。  
-当此类指令执行完成时，任何未被选中的分支路径都会被丢弃。  
+条件分支和间接跳转指令可能在指令树中有多个后继节点。
+当此类指令执行完成时，任何未被选中的分支路径都会被丢弃。
 
-指令树中的每个指令实例都有一个状态，其中包括该指令的内部指令语义执行状态  
-（即该指令的 ISA 伪代码）。模型使用 Sail 形式化定义内部指令语义。  
-可以将指令的执行状态视为伪代码控制状态、伪代码调用栈和局部变量值的表示。  
+指令树中的每个指令实例都有一个状态，其中包括该指令的内部指令语义执行状态
+（即该指令的 ISA 伪代码）。模型使用 Sail 形式化定义内部指令语义。
+可以将指令的执行状态视为伪代码控制状态、伪代码调用栈和局部变量值的表示。
 指令实例状态还包括该实例的内存和寄存器占用情况、寄存器的读写操作、内存操作、是否完成等信息。
 
 *模型转换*
 
-该模型为任何模型状态定义了一组允许的转换，每个转换都是一个单一的原子步骤，转换到一个新的抽象机器状态。  
-单个指令的执行通常涉及许多转换，并且这些转换可能与其他指令的转换在操作模型执行中交织在一起。  
-每个转换都源自一个指令实例；它将改变该实例的状态，并且可能依赖于或改变其他硬件线程状态和共享内存状态，但它不依赖于其他硬件线程状态，并且不会改变它们。  
+该模型为任何模型状态定义了一组允许的转换，每个转换都是一个单一的原子步骤，转换到一个新的抽象机器状态。
+单个指令的执行通常涉及许多转换，并且这些转换可能与其他指令的转换在操作模型执行中交织在一起。
+每个转换都源自一个指令实例；它将改变该实例的状态，并且可能依赖于或改变其他硬件线程状态和共享内存状态，但它不依赖于其他硬件线程状态，并且不会改变它们。
 以下介绍了这些转换，并在 <<transitions>> 中进行了定义，给出了每个转换的前置条件和后续模型状态的构造。
 
 所有指令的转换：
 
 * <<fetch, 获取指令>>：此转换表示从程序顺序中的上一个获取的指令实例（或初始获取地址）开始，获取并解码一个新的指令实例。
 
-该模型假设指令内存是固定的；它不描述自修改代码的行为。特别地，<<fetch, 获取指令>> 转换不会生成内存加载操作，且共享内存不参与该转换。  
+该模型假设指令内存是固定的；它不描述自修改代码的行为。特别地，<<fetch, 获取指令>> 转换不会生成内存加载操作，且共享内存不参与该转换。
 相反，模型依赖于一个外部预言机，该预言机在给定内存位置时提供一个操作码。
 
-[circle]  
+[circle]
 * <<reg_write, 寄存器写操作>>：这是对寄存器值的写操作。
 
 * <<reg_read, 寄存器读操作>>：这是从最近的程序顺序前驱指令实例读取寄存器值，该前驱指令写入该寄存器。
 
 * <<sail_interp, 伪代码内部步骤>>：这涵盖了伪代码内部的计算：算术运算、函数调用等。
 
-* <<finish, 完成指令>>：此时指令的伪代码已完成，指令不能重新启动，内存访问不能被丢弃，所有内存效应都已发生。  
+* <<finish, 完成指令>>：此时指令的伪代码已完成，指令不能重新启动，内存访问不能被丢弃，所有内存效应都已发生。
 对于条件分支和间接跳转指令，任何从未写入 _pc_ 寄存器的地址中获取的程序顺序后继都将被丢弃，并且其下的指令实例子树也将被丢弃。
 
 特定于加载指令的转换：
 
-[circle]  
+[circle]
 * <<initiate_load, 启动内存加载操作>>：此时加载指令的内存足迹已暂时确定（如果之前的指令被重启，则可能会发生变化），并且可以开始满足其各个内存加载操作。
 
-[disc]  
+[disc]
 * <<sat_from_forwarding, 通过从未传播的存储转发满足内存加载操作>>：通过从程序顺序前的内存存储操作转发，部分或完全满足单个内存加载操作。
 
 * <<sat_from_mem, 从内存满足内存加载操作>>：完全满足单个内存加载操作的所有待处理片段，来自内存。
 
-[circle]  
+[circle]
 * <<complete_loads, 完成加载操作>>：此时，指令的所有内存加载操作都已完全满足，指令伪代码可以继续执行。加载指令可以在此之前被重启，但在某些条件下，模型可能会在加载指令完成之前就将其视为不可重启（例如，见）。
 
 特定于存储指令的转换：
 
-[circle]  
+[circle]
 * <<initiate_store_footprint, 启动内存存储操作足迹>>：此时存储的内存足迹已暂时确定。
 
 * <<instantiate_store_value, 实例化内存存储操作值>>：此时内存存储操作已具备其值，并且可以通过转发从它们开始满足程序顺序后的内存加载操作。
 
 * <<commit_stores, 提交存储指令>>：此时存储操作已被保证发生（指令不再可以重启或丢弃），并且可以开始将它们传播到内存。
 
-[disc]  
+[disc]
 * <<prop_store, 传播存储操作>>：将单个内存存储操作传播到内存。
 
-[circle]  
+[circle]
 * <<complete_stores, 完成存储操作>>：此时，指令的所有内存存储操作已传播到内存，指令伪代码可以继续执行。
 
 特定于 `sc` 指令的转换：
 
-[disc]  
+[disc]
 * <<early_sc_fail, 提前失败的sc>>：导致 `sc` 失败，可能是自发失败，也可能是因为它没有与程序顺序前的 `lr` 配对。
 
 * <<paired_sc, 配对的sc>>：此转换表示 `sc` 与 `lr` 配对，可能会成功。
@@ -523,76 +523,76 @@ http://www.cl.cam.ac.uk/。命令行接口比 Web 界面更快，
 
 特定于 AMO 指令的转换：
 
-[disc]  
+[disc]
 * <<do_amo, 满足、提交并传播 AMO 操作>>：这是满足加载操作、执行所需算术运算，并传播存储操作的所有必要转换的原子执行。
 
 特定于 fence 指令的转换：
 
-[circle]  
-* <<commit_fence, 提交 fence>>  
+[circle]
+* <<commit_fence, 提交 fence>>
 
 标有 latexmath:[$\circ$] 的转换可以在其前提条件满足时立即执行，而无需排除其他行为；而 latexmath:[$\bullet$] 不可以。尽管 <<fetch, Fetch instruction>> 标有 latexmath:[$\bullet$]，但只要它没有被执行无限次，它也可以立即执行。
 
 一个非 AMO 加载指令的实例，在被提取后，通常会经历以下转换顺序：
 
-. <<reg_read, 寄存器读取>>  
-. <<initiate_load, 启动内存加载操作>>  
-. <<sat_by_forwarding, 通过从未传播的存储转发满足内存加载操作>> 和/或 <<sat_from_mem, 从内存满足内存加载操作>>（根据需要满足实例的所有加载操作）  
-. <<complete_loads, 完成加载操作>>  
-. <<reg_write, 寄存器写入>>  
+. <<reg_read, 寄存器读取>>
+. <<initiate_load, 启动内存加载操作>>
+. <<sat_by_forwarding, 通过从未传播的存储转发满足内存加载操作>> 和/或 <<sat_from_mem, 从内存满足内存加载操作>>（根据需要满足实例的所有加载操作）
+. <<complete_loads, 完成加载操作>>
+. <<reg_write, 寄存器写入>>
 . <<finish, 完成指令>>
 
 在上述转换之前、之间和之后，可能会出现任何数量的 <<sail_interp, 伪代码内部步骤>> 转换。此外，直到执行时，都会提供 <<fetch, Fetch instruction>> 转换，用于提取下一个程序位置的指令。
 
 这部分是操作模型的非正式描述。接下来的部分将描述正式的操作模型。
 
-[[pseudocode_exec]]  
-==== 指令内部伪代码执行  
+[[pseudocode_exec]]
+==== 指令内部伪代码执行
 
 每个指令实例的指令内部语义表示为一个状态机，基本上执行指令伪代码。给定一个伪代码执行状态，它计算下一个状态。大多数状态标识一个待处理的内存或寄存器操作，这是伪代码请求的，内存模型必须完成。状态有（这是一个标签联合；标签为小写字母）：
 
-[cols="<,<",grid="none"]  
-|===  
-|Load_mem(_kind_, _address_, _size_, _load_continuation_) |- 内存加载操作  
+[cols="<,<",grid="none"]
+|===
+|Load_mem(_kind_, _address_, _size_, _load_continuation_) |- 内存加载操作
 
-|Early_sc_fail(_res_continuation_) |- 允许 `sc` 提前失败  
+|Early_sc_fail(_res_continuation_) |- 允许 `sc` 提前失败
 
-|Store_ea(_kind_, _address_, _size_, _next_state_) |- 内存存储有效地址  
+|Store_ea(_kind_, _address_, _size_, _next_state_) |- 内存存储有效地址
 
-|Store_memv(_mem_value_, _store_continuation_) |- 内存存储值  
+|Store_memv(_mem_value_, _store_continuation_) |- 内存存储值
 
-|Fence(_kind_, _next_state_) |- fence  
+|Fence(_kind_, _next_state_) |- fence
 
-|Read_reg(_reg_name_, _read_continuation_) |- 寄存器读取  
+|Read_reg(_reg_name_, _read_continuation_) |- 寄存器读取
 
-|Write_reg(_reg_name_, _reg_value_, _next_state_) |- 寄存器写入  
+|Write_reg(_reg_name_, _reg_value_, _next_state_) |- 寄存器写入
 
-|Internal(_next_state_) |- 伪代码内部步骤  
+|Internal(_next_state_) |- 伪代码内部步骤
 
-|Done |- 伪代码结束  
+|Done |- 伪代码结束
 |===
 
 这里：
 
-* _mem_value_ 和 _reg_value_ 是字节列表；  
-* _address_ 是一个 XLEN 位的整数；  
+* _mem_value_ 和 _reg_value_ 是字节列表；
+* _address_ 是一个 XLEN 位的整数；
 
-对于加载/存储，_kind_ 标识它是 `lr/sc`，acquire-RCpc/release-RCpc，acquire-RCsc/release-RCsc，acquire-release-RCsc；  
-* 对于 fence，_kind_ 标识它是正常的还是 TSO 的，并且（对于正常 fence）标识前驱和后继排序位；  
+对于加载/存储，_kind_ 标识它是 `lr/sc`，acquire-RCpc/release-RCpc，acquire-RCsc/release-RCsc，acquire-release-RCsc；
+* 对于 fence，_kind_ 标识它是正常的还是 TSO 的，并且（对于正常 fence）标识前驱和后继排序位；
 * _reg_name_ 标识一个寄存器及其切片（起始和结束位索引）；连续性描述了指令实例如何在每个可能由周围内存模型提供的值上继续执行（_load_continuation_ 和 _read_continuation_ 获取从内存加载和从先前寄存器写入读取的值，_store_continuation_ 对于失败的 `sc` 取 _false_，在所有其他情况下取 _true_，而 _res_continuation_ 如果 `sc` 失败则取 _false_，否则取 _true_）。
 
-[NOTE]  
-====  
+[NOTE]
+====
 例如，给定加载指令 `lw x1,0(x2)`，执行通常会按以下方式进行。初始执行状态将从给定操作码的伪代码中计算出。这可以预期为 Read_reg(`x2`, _read_continuation_)。将寄存器 `x2` 的最新写入值（指令语义将在需要时阻塞，直到寄存器值可用），假设为 `0x4000`，传递给 _read_continuation_ 后返回 Load_mem(`plain_load`, `0x4000`, `4`, _load_continuation_)。将从内存位置 `0x4000` 加载的 4 字节值，假设为 `0x42`，传递给 _load_continuation_ 后返回 Write_reg(`x1`, `0x42`, Done)。在上述状态之前和之间，可能会出现许多 Internal(_next_state_) 状态。
 
-====  
+====
 请注意，写入内存分为两步，Store_ea 和 Store_memv：第一步使存储的内存足迹暂时已知，第二步添加要存储的值。我们确保在伪代码中这两步是配对的（Store_ea 后跟 Store_memv），但它们之间可能有其他步骤。
 
-[NOTE]  
-====  
+[NOTE]
+====
 可以观察到 Store_ea 可以在存储值确定之前发生。例如，对于 litmus 测试 LB+fence.r.rw+data-po，要允许由操作模型（如 RVWMO）通过，Hart 1 中的第一个存储必须在确定值之前执行 Store_ea 步骤，以便第二个存储可以看到它是写入到一个不重叠的内存足迹，从而允许第二个存储无序提交，而不违反一致性。
 
-====  
+====
 每条指令的伪代码最多执行一次存储或加载，除了执行恰好一次加载和一次存储的 AMO。然后，这些内存访问被分割成架构上原子的单元，按照硬件线程语义（参见 <<initiate_load, 启动内存加载操作>> 和 <<initiate_store_footprint, 启动内存存储操作足迹>>）。
 
 非正式地，每一位寄存器读取应该由能够写入该位的最新（按程序顺序）指令实例来满足（如果没有这样的写入，则由硬件线程的初始寄存器状态来提供）。因此，了解每个指令实例的寄存器写入足迹至关重要，我们在指令实例创建时计算该足迹（参见下文的 <<fetch, 提取指令>> 操作）。我们在伪代码中确保每条指令对每个位寄存器最多执行一次寄存器写入，并且确保它不会尝试读取它刚刚写入的寄存器值。
