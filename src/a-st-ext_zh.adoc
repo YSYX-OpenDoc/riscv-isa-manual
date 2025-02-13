@@ -1,7 +1,7 @@
 [[atomics]]
 == "A" 扩展:  原子指令，版本 2.1
 
-"A" 扩展，即原子指令扩展，包含了一系列用于原子读-修改-写内存操作的指令，旨在支持在同一内存空间内运行的多个 RISC-V 硬件线程之间的同步。 该扩展提供了两种形式的原子指令：加载预留/条件存储指令 以及 原子fetch-and-op内存指令。这两种指令均支持多种内存一致性模型，包括无序、获取一致性、释放一致性和顺序一致性语义。这些指令使得 RISC-V 能够支持 RCsc 内存一致性模型。 cite:[Gharachorloo90memoryconsistency]
+"A" 扩展，即原子指令扩展，包含了一系列用于原子读-修改-写内存操作的指令，旨在支持在同一内存空间内运行的多个 RISC-V 硬件线程之间的同步。 该扩展提供了两种形式的原子指令：加载预留/条件存储指令 以及 原子fetch-and-op内存指令。这两种指令均支持多种内存一致性模型，包括无序、获取一致性、释放一致性和顺序一致性语义。这些指令使得 RISC-V 能够支持 RCsc 内存一致性模型。cite:[Gharachorloo90memoryconsistency]
 
 [NOTE]
 ====
@@ -19,7 +19,7 @@ A 扩展包括 Zaamo 扩展和 Zalrsc 扩展所提供的指令。
 如果 aq 位和 rl 位均为清零状态，则不会对原子内存操作施加额外的顺序约束。反之，若仅设置了 aq 位，则该原子内存操作将被视为 “获取 (acquire)” 访问，这意味着在该 RISC-V 硬件线程上，任何后续的内存操作，都不能被观测到在该获取操作之前发生。类似地，若仅设置了 rl 位，则原子内存操作将被视为 “释放 (release)” 访问，即，释放操作本身不能被观测到发生在同一 硬件线程上任何更早的内存操作之前。当 aq 位和 rl 位同时置位时，该原子内存操作将具备顺序一致性。亦即，在同一 RISC-V 硬件线程上，针对同一地址域的访问，既不能观测到该指令发生在任何更早的内存操作之前，也不能观测到其发生在任何更晚的内存操作之后。
 
 [[sec:lrsc]]
-=== "Zalrsc" Extension for Load-Reserved/Store-Conditional Instructions
+=== "Zalrsc" 扩展，用于Load-Reserved/Store-Conditional指令
 
 include::images/wavedrom/load-reserve-st-conditional.adoc[]
 
@@ -105,21 +105,21 @@ LR/SC 序列可以通过在 LR 指令上将 aq 位置为 1 来赋予获取（acq
 
 [[cas]]
 [source,asm]
-.Sample code for compare-and-swap function using LR/SC.
-        # a0 holds address of memory location
-        # a1 holds expected value
-        # a2 holds desired value
-        # a0 holds return value, 0 if successful, !0 otherwise
+.使用 LR/SC 的比较并交换函数示例代码。
+        # a0 寄存器存储内存地址
+        # a1 寄存器存储期望值
+        # a2 寄存器存储目标值
+        # a0 寄存器存储返回值，0 表示成功，非 0 表示失败
     cas:
-        lr.w t0, (a0)        # Load original value.
-        bne t0, a1, fail     # Doesn't match, so fail.
-        sc.w t0, a2, (a0)    # Try to update.
-        bnez t0, cas         # Retry if store-conditional failed.
-        li a0, 0             # Set return to success.
-        jr ra                # Return.
+        lr.w t0, (a0)        # 加载原始值。
+        bne t0, a1, fail     # 值不匹配，因此失败。
+        sc.w t0, a2, (a0)    # 尝试更新。
+        bnez t0, cas         # 如果条件存储失败，则重试。
+        li a0, 0             # 设置返回值为成功。
+        jr ra                # 返回。
     fail:
-        li a0, 1             # Set return to failure.
-        jr ra                # Return.
+        li a0, 1             # 设置返回值为失败。
+        jr ra                # 返回。
 
 
 LR/SC 可以用来构建无锁数据结构。以下是一个使用 LR/SC 实现比较和交换（compare-and-swap）
@@ -221,17 +221,17 @@ AMO 被设计为高效地实现 C11 和 C++11 的内存模型。尽管 FENCE R�
 
 [[critical]]
 [source,asm]
-.Sample code for mutual exclusion. `a0` contains the address of the lock.
-        li           t0, 1        # Initialize swap value.
+.互斥示例代码。锁地址在 a0 中。
+        li           t0, 1        # 初始化交换值为 1。
     again:
-        lw           t1, (a0)     # Check if lock is held.
-        bnez         t1, again    # Retry if held.
-        amoswap.w.aq t1, t0, (a0) # Attempt to acquire lock.
-        bnez         t1, again    # Retry if held.
+        lw           t1, (a0)     # 检查锁是否被持有。
+        bnez         t1, again    # 如果已被持有，则重试。
+        amoswap.w.aq t1, t0, (a0) # 尝试获取锁。
+        bnez         t1, again    # 如果已被持有，则重试。
         # ...
-        # Critical section.
+        # 临界区。
         # ...
-        amoswap.w.rl x0, x0, (a0) # Release lock by storing 0.
+        amoswap.w.rl x0, x0, (a0) # 通过存储 0 来释放锁。
 
 [NOTE]
 ====
