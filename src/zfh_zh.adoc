@@ -60,7 +60,7 @@ include::images/wavedrom/flt-to-flt-sgn-inj-instr.adoc[]
 
 FMV.H.X 将整数寄存器 _rs1_ 的低 16 位中编码的 IEEE 754-2008 标准编码表示的半精度值移动到浮点寄存器 _rd_ 中，对结果进行 NaN-boxing。
 
-FMV.X.H 和 FMV.H.X 不会修改正在传输的位；特别是，非规范 NaN 的有效负载会被保留。
+FMV.X.H 和 FMV.H.X 不会修改正在传输的位；特别地，非规范 NaN 的有效负载会被保留。
 
 include::images/wavedrom/flt-pt-to-int-move.adoc[]
 [[flt-pt-to-int-move]]
