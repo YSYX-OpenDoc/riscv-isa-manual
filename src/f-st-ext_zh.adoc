@@ -218,11 +218,11 @@ include::images/wavedrom/spfloat2.adoc[]
 融合乘加（FMA）指令占用了 32 位指令编码空间的很大一部分。曾考虑过一些替代方案，例如限制 FMA 仅使用动态舍入模式，但静态舍入模式在利用积不舍入的代码中仍然有用。另一种方案是使用 rd 作为 rs3，但这在某些常见序列中需要额外的移动指令。当前的设计仍然保留了 32 位编码空间中的大部分，同时避免了 FMA 指令的非正交性。
 ====
 
-融合乘加指令在乘数为无穷大（latexmath:[$\infty$]）且被乘数为零时，必须设置无效操作异常标志，即使加数是安静 NaN（quiet NaN）。  
+融合乘加指令在乘数为无穷大（latexmath:[$\infty$]）且被乘数为零时，必须设置无效操作异常标志，即使加数是静默 NaN（quiet NaN）。  
 
 [NOTE]
 ====
-IEEE 754-2008 标准允许，但不强制要求，在执行 latexmath:[$\infty \times 0 +$] 安静 NaN 这一运算时触发无效操作异常。
+IEEE 754-2008 标准允许，但不强制要求，在执行 latexmath:[$\infty \times 0 +$] 静默 NaN 这一运算时触发无效操作异常。
 ====
 
 === 单精度浮点转换和移动指令
@@ -294,7 +294,7 @@ include::images/wavedrom/spfloat-mv.adoc[]
 
 浮点比较指令（FEQ.S、FLT.S、FLE.S）在浮点寄存器之间执行指定的比较（latexmath:[$\mbox{\em rs1} = \mbox{\em rs2}$], latexmath:[$\mbox{\em rs1} < \mbox{\em rs2}$], latexmath:[$\mbox{\em rs1} \leq \mbox{\em rs2}$]），如果条件成立，则向整数寄存器 _rd_ 写入 1，否则写入 0。
 
-FLT.S 和 FLE.S 执行 IEEE 754-2008 标准所称的 _信号_ 比较（signaling comparison），即如果任一输入为 NaN，则设置无效操作异常标志。FEQ.S 执行 _安静_ 比较（quiet comparison），仅当任一输入为信号 NaN 时才会设置无效操作异常标志。对于这三条指令，如果任一操作数为 NaN，则结果为 0。
+FLT.S 和 FLE.S 执行 IEEE 754-2008 标准所称的 _信号_ 比较（signaling comparison），即如果任一输入为 NaN，则设置无效操作异常标志。FEQ.S 执行 _静默_ 比较（quiet comparison），仅当任一输入为信号 NaN 时才会设置无效操作异常标志。对于这三条指令，如果任一操作数为 NaN，则结果为 0。
 
 include::images/wavedrom/spfloat-comp.adoc[]
 [[spfloat-comp]]
@@ -329,5 +329,5 @@ include::images/wavedrom/spfloat-classify.adoc[]
 |6 |_rs1_ 是正正规数.
 |7 |_rs1_ 是 latexmath:[$+\infty$].
 |8 |_rs1_ 是信号 NaN.
-|9 |_rs1_ 是安静 NaN.
+|9 |_rs1_ 是静默 NaN.
 |===
