@@ -278,7 +278,7 @@ FMV.W.X 将按照 IEEE 754-2008 标准编码的单精度值，从整数寄存器
 
 [NOTE]
 ====
-FMV.W.X 和 FMV.X.W 指令之前被称为 FMV.S.X 和 FMV.X.S。使用 W 更符合它们作为一种指令的语义，即移动 32 位数据而不对其进行解释。随着 NaN-boxing 定义的清晰，这一点变得更加明确。为了避免影响现有代码，工具将同时支持 W 版和 S 版指令。
+FMV.W.X 和 FMV.X.W 指令之前被称为 FMV.S.X 和 FMV.X.S。使用 W 更符合它们作为一种指令的语义，即移动 32 位数据而不对其进行解释。随着 NaN装箱（NaN-boxing） 定义的清晰，这一点变得更加明确。为了避免影响现有代码，工具将同时支持 W 版和 S 版指令。
 ====
 
 include::images/wavedrom/spfloat-mv.adoc[]
