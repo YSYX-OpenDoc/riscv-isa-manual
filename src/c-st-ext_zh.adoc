@@ -1,4 +1,4 @@
-== "C" 扩展用于压缩指令，版本 2.0
+== "C" 扩展：压缩指令，版本 2.0
 
 本章描述了 RISC-V 标准压缩指令集扩展，称为 "C"，通过为常见操作添加简短的 16 位指令编码来减少静态和动态代码大小。C 扩展可以添加到任何基本 ISA（RV32、RV64、RV128），我们使用通用术语 "RVC" 来涵盖其中的任何一种。通常，程序中 50%-60% 的 RISC-V 指令可以替换为 RVC 指令，从而实现 25%-30% 的代码大小减少。
 
@@ -312,7 +312,7 @@ include::images/wavedrom/c-int-reg-immed.adoc[]
 //.整数寄存器-立即数格式。
 (((compressed, integer register-immediate)))
 
-C.ADDI 将非零符号扩展的 6 位立即数添加到寄存器 _rd_ 中的值，然后将结果写入 _rd_。C.ADDI 扩展为 `addi rd, rd, imm`。当 `_rd_≠x0` 且 `_imm_≠0` 时，C.ADDI 才有效。_rd_=x0 的代码点编码为 C.NOP 指令；_imm_=0 的剩余代码点编码为 HINTs。
+C.ADDI 将非零符号扩展的 6 位立即数与寄存器 _rd_ 中的值相加，然后将结果写入 _rd_。C.ADDI 扩展为 `addi rd, rd, imm`。当 `_rd_≠x0` 且 `_imm_≠0` 时，C.ADDI 才有效。_rd_=x0 的代码点编码为 C.NOP 指令；_imm_=0 的剩余代码点编码为 HINTs。
 
 C.ADDIW 是 RV64C/RV128C 专用指令，执行相同的计算，但生成 32 位结果，然后将结果符号扩展到 64 位。C.ADDIW 扩展为 `addiw rd, rd, imm`。对于 C.ADDIW，立即数可以为零，此时对应于 `sext.w rd`。C.ADDIW 仅在 `_rd_≠x0` 时有效；_rd_=x0 的代码点保留。
 
@@ -328,7 +328,7 @@ include::images/wavedrom/c-ciw.adoc[]
 //.CIW 格式。
 (((compressed, CIW)))
 
-C.ADDI4SPN 是 CIW 格式指令，将零扩展的非零立即数（按 4 缩放）添加到堆栈指针 `x2`，并将结果写入 `rd′`。此指令用于生成指向堆栈分配变量的指针，并扩展为 `addi rd′, x2, nzuimm[9:2]`。当 _nzuimm_≠0 时，C.ADDI4SPN 才有效；_nzuimm_=0 的代码点保留。
+C.ADDI4SPN 是 CIW 格式指令，将零扩展的非零立即数（按 4 缩放）与堆栈指针 `x2` 相加，并将结果写入 `rd′`。此指令用于生成指向堆栈分配变量的指针，并扩展为 `addi rd′, x2, nzuimm[9:2]`。当 _nzuimm_≠0 时，C.ADDI4SPN 才有效；_nzuimm_=0 的代码点保留。
 
 [[c-ci]]
 include::images/wavedrom/c-ci.adoc[]
@@ -387,17 +387,17 @@ include::images/wavedrom/c-int-reg-to-reg-ca-format.adoc[]
 
 这些指令使用 CA 格式。
 
-`C.AND` 计算寄存器 _rd′_ 和 _rs2′_ 中值的按位与，然后将结果写入寄存器 _rd′_。`C.AND` 扩展为 *`_and rd′, rd′, rs2′_`*。
+`C.AND` 将寄存器 _rd′_ 和 _rs2′_ 中的值的进行按位与计算，然后将结果写入寄存器 _rd′_。`C.AND` 扩展为 *`_and rd′, rd′, rs2′_`*。
 
-`C.OR` 计算寄存器 _rd′_ 和 _rs2′_ 中值的按位或，然后将结果写入寄存器 _rd′_。`C.OR` 扩展为 *`_or rd′, rd′, rs2′_`*。
+`C.OR` 将寄存器 _rd′_ 和 _rs2′_ 中的值的进行按位或计算，然后将结果写入寄存器 _rd′_。`C.OR` 扩展为 *`_or rd′, rd′, rs2′_`*。
 
-`C.XOR` 计算寄存器 _rd′_ 和 _rs2′_ 中值的按位异或，然后将结果写入寄存器 _rd′_。`C.XOR` 扩展为 *`_xor rd′, rd′, rs2′_`*。
+`C.XOR` 将寄存器 _rd′_ 和 _rs2′_ 中值的进行按位异或计算，然后将结果写入寄存器 _rd′_。`C.XOR` 扩展为 *`_xor rd′, rd′, rs2′_`*。
 
-`C.SUB` 将寄存器 _rs2′_ 中的值从寄存器 _rd′_ 中的值中减去，然后将结果写入寄存器 _rd′_。`C.SUB` 扩展为 *`_sub rd′, rd′, rs2′_`*。
+`C.SUB` 将寄存器 _rd′_ 中的值减去寄存器 _rs2′_中的值，然后将结果写入寄存器 _rd′_。`C.SUB` 扩展为 *`_sub rd′, rd′, rs2′_`*。
 
 `C.ADDW` 是 RV64C/RV128C 专用指令，将寄存器 _rd′_ 和 _rs2′_ 中的值相加，然后将和的低 32 位符号扩展后写入寄存器 _rd′_。`C.ADDW` 扩展为 *`_addw rd′, rd′, rs2′_`*。
 
-`C.SUBW` 是 RV64C/RV128C 专用指令，将寄存器 _rs2′_ 中的值从寄存器 _rd′_ 中的值中减去，然后将差的低 32 位符号扩展后写入寄存器 _rd′_。`C.SUBW` 扩展为 *`_subw rd′, rd′, rs2′_`*。
+`C.SUBW` 是 RV64C/RV128C 专用指令，将寄存器 _rd′_ 中的值减去寄存器 _rs2′_中的值，然后将差的低 32 位符号扩展后写入寄存器 _rd′_。`C.SUBW` 扩展为 *`_subw rd′, rd′, rs2′_`*。
 
 [NOTE]
 ====
@@ -454,7 +454,7 @@ RVC HINTs 编码为不修改架构状态的计算指令，因为 _rd_=`x0`（例
 选择这种 HINT 编码是为了使简单的实现可以完全忽略 HINTs，而是将 HINT 作为常规计算指令执行，恰好不改变架构状态。
 ====
 
-RVC HINTs 不一定扩展为其 RVI HINT 对应物。例如，`C.ADD` _x0_, _a0_ 可能不会编码为与 `ADD` _x0_, _x0_, _a0_ 相同的 HINT。
+RVC HINTs 不一定扩展为其对应的 RVI HINT。例如，`C.ADD` _x0_, _a0_ 可能不会编码为与 `ADD` _x0_, _x0_, _a0_ 相同的 HINT。
 
 [NOTE]
 ====
