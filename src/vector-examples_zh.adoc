@@ -12,7 +12,7 @@ include::example/vvaddint32_zh.s[lines=4..-1]
 === 混合宽度掩码和计算的示例
 
 ----
-# 使用一种位宽计算谓词，使用不同的位宽进行掩码计算
+# 代码可以对掩码操作使用一种数据宽度，而对被掩码的计算使用不同的数据宽度
 #   int8_t a[]; int32_t b[], c[];
 #   for (i=0;  i<n; i++) { b[i] =  (a[i] < 5) ? c[i] : 1; }
 #
@@ -64,19 +64,19 @@ loop:
       add a4, a4, t0        # 更新 z[i] 指针
       bnez a0, loop
 ----
-=== SAXPY 示例
+=== SAXPY (Single-Precision A·X Plus Y) 示例
 
 ----
 include::example/saxpy_zh.s[lines=4..-1]
 ----
 
-=== SGEMM 示例
+=== SGEMM (Single precision General Matrix Multiplication) 示例
 
 ----
 include::example/sgemm_zh.S[lines=4..-1]
 ----
 
-=== 近似除法示例
+=== 近似除法计算示例
 
 ----
 # v1 = v1 / v2，精度接近 23 位
@@ -93,7 +93,7 @@ vfmul.vv v1, v1, v3         # 计算 v1/v2 的估算值
 
 ----
 
-=== 近似平方根示例
+=== 近似平方根计算示例
 
 ----
 # v1 = sqrt(v1)，精度接近 23 位
@@ -105,13 +105,13 @@ vmfne.vf v0, v2, ft0, v0.t  # 额外屏蔽 +inf 输入
   li t0, 0x40400000
 vmv.v.x v4, t0              # 复制 3.0 到向量
 vfmul.vv v3, v1, v2, v0.t   # 计算 x * 估算值
-vfnmsub.vv v3, v2, v4, v0.t # 计算 - x * 估算值 * 估算值 + 3
-vfmul.vv v3, v3, v2, v0.t   # 计算 估算值 * (-x * 估算值 * 估算值 + 3)
+vfnmsub.vv v3, v2, v4, v0.t # 计算 (- x) * 估算值 * 估算值 + 3
+vfmul.vv v3, v3, v2, v0.t   # 计算 估算值 * ( (- x) * 估算值 * 估算值 + 3)
   li t0, 0x3f000000
   fmv.w.x ft0, t0           # 0.5
 vfmul.vf v2, v3, ft0, v0.t  # 估算到 14 位精度
 vfmul.vv v3, v1, v2, v0.t   # 计算 x * 估算值
-vfnmsub.vv v3, v2, v4, v0.t # 计算 - x * 估算值 * 估算值 + 3
+vfnmsub.vv v3, v2, v4, v0.t # 计算 (- x) * 估算值 * 估算值 + 3
 vfmul.vv v3, v3, v2, v0.t   # 计算 估算值 * (-x * 估算值 * 估算值 + 3)
 vfmul.vf v2, v3, ft0, v0.t  # 估算到 23 位精度
 vfmul.vv v1, v2, v1, v0.t   # 计算 x * 1/sqrt(x)
