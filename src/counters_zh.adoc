@@ -1,9 +1,9 @@
 [[counters]]  
-== "Zicntr" 和 "Zihpm" 计数器扩展，版本 2.0  
+== “Zicntr” 和 “Zihpm” 扩展：计数器，版本 2.0  
 
 RISC-V ISA 提供了一组最多 32 个 64 位的性能计数器和定时器，用户可以通过非特权的 XLEN 位只读 CSR 寄存器 `0xC00`–`0xC1F` 进行访问（当 XLEN=32 时，上 32 位可通过 CSR 寄存器 `0xC80`–`0xC9F` 访问）。这些计数器被划分为 "Zicntr" 和 "Zihpm" 扩展。  
 
-=== "Zicntr" 基本计数器和定时器扩展  
+=== “Zicntr”扩展：基本计数器和定时器
 
 Zicntr 标准扩展包括前三个基本计数器（CYCLE、TIME 和 INSTRET），分别用于 CPU 周期计数、实时时钟和已提交指令数。Zicntr 扩展依赖于 Zicsr 扩展。  
 
@@ -77,7 +77,7 @@ RDINSTRET 伪指令读取 `instret` CSR 的低 XLEN 位，该 CSR 计算从过�
         rdcycleh     x4  
         bne          x3, x4, again  
 
-=== "Zihpm" 扩展用于硬件性能计数器  
+=== “Zihpm”扩展：硬件性能计数器  
 
 Zihpm 扩展包括多达 29 个额外的非特权 64 位硬件性能计数器，`hpmcounter3-hpmcounter31`。当 XLEN=32 时，这些性能计数器的高 32 位可以通过额外的 CSR `hpmcounter3h-hpmcounter31h` 访问。Zihpm 扩展依赖于 Zicsr 扩展。  
 
