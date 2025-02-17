@@ -13,7 +13,7 @@
 我们在 Alloy (http://alloy.mit.edu) 中提供了 RVWMO 内存模型的正式规范。该模型可在线获取，网址为
 https://github.com/daniellustig/riscv-memory-model。
 
-该在线材料还包含一些试金石测试 (litmus tests)， 以及 Alloy 如何用于模型检查 <<memory_porting>> 中部分映射的示例。
+该在线材料还包含一些试纸测试， 以及 Alloy 如何用于模型检查 <<memory_porting>> 中部分映射的示例。
 
 .Alloy 中形式化的 RVWMO 内存模型 (1/5: PPO)
 [source,c]
@@ -241,7 +241,7 @@ pred total[rel: Event->Event, bag: Event] {
 [[sec:herd]]
 === Herd 中的正式公理规范
 
-工具 [.sans-serif]#herd# 接收一个内存模型和一个试金石测试作为输入，并在该内存模型上模拟测试执行。内存模型用特定领域语言 Cat 编写。本节提供了两种 RVWMO 的 Cat 内存模型。第一个模型 <<herd2>> 尽可能遵循 _全局内存顺序_，即本书第 <<memorymodel>> 章中对 RVWMO 的定义。第二个模型 <<herd3>> 是一个等效的、更高效的基于部分顺序的 RVWMO 模型。
+工具 [.sans-serif]#herd# 接收一个内存模型和一个试纸测试作为输入，并在该内存模型上模拟测试执行。内存模型用特定领域语言 Cat 编写。本节提供了两种 RVWMO 的 Cat 内存模型。第一个模型 <<herd2>> 尽可能遵循 _全局内存顺序_，即本书第 <<memorymodel>> 章中对 RVWMO 的定义。第二个模型 <<herd3>> 是一个等效的、更高效的基于部分顺序的 RVWMO 模型。
 
 模拟器 `herd` 是 `diy` 工具套件的一部分 — 相关软件和文档请参见 http://diy.inria.fr 。模型和更多内容可在线访问 http://diy.inria.fr/cats7/riscv/。
 [[herd1]]
@@ -392,13 +392,13 @@ empty rmw & (fre;coe) as Atomic
 
 操作风格的表述涵盖了混合大小的执行，可能包括不同 2 的幂字节大小的重叠内存访问。未对齐的访问会被拆分为单字节访问。
 
-操作模型与 RISC-V ISA 语义的一个片段（RV64I 和 A）被集成到 `rmem` 探索工具中（https://github.com/rems-project/rmem）。`rmem` 可以通过穷举、伪随机和交互式的方式探索试金石测试（见 <<litmustests>>）和小型 ELF 二进制文件。在 `rmem` 中，ISA 语义被显式地用 Sail 表达（关于 Sail 语言，请参见 https://github.com/rems-project/sail，关于 RISC-V ISA 模型，请参见 https://github.com/rems-project/sail-riscv），并且并发语义通过 Lem 表达（关于 Lem 语言，请参见 https://github.com/rems-project/lem）。
+操作模型与 RISC-V ISA 语义的一个片段（RV64I 和 A）被集成到 `rmem` 探索工具中（https://github.com/rems-project/rmem）。`rmem` 可以通过穷举、伪随机和交互式的方式探索试纸测试（见 <<litmustests>>）和小型 ELF 二进制文件。在 `rmem` 中，ISA 语义被显式地用 Sail 表达（关于 Sail 语言，请参见 https://github.com/rems-project/sail，关于 RISC-V ISA 模型，请参见 https://github.com/rems-project/sail-riscv），并且并发语义通过 Lem 表达（关于 Lem 语言，请参见 https://github.com/rems-project/lem）。
 
-`rmem` 提供命令行界面和网页界面。网页界面完全在客户端运行，并在线提供，包含一系列试金石测试库：http://www.cl.cam.ac.uk/。命令行接口比 Web 界面更快，特别是在穷举模式下。
+`rmem` 提供命令行界面和网页界面。网页界面完全在客户端运行，并在线提供，包含一系列试纸测试库：http://www.cl.cam.ac.uk/ 。命令行接口比 Web 界面更快，特别是在穷举模式下。
 
 下面是对模型状态和转换的非正式介绍。正式模型的描述将从下一小节开始。
 
-术语：与公理化表述不同，在这里每个内存操作要么是加载（load），要么是存储（store）。因此，原子内存操作（AMO）会引发两种不同的内存操作：加载和存储。当与 `instruction` 结合使用时，术语 `load` 和 `store` 指的是会引发这些内存操作的指令。因此，两者都包括 AMO 指令。术语 `acquire` 指带有 acquire-RCpc 或 acquire-RCsc 注释的指令（或其内存操作）。术语 `release` 指带有 release-RCpc 或 release-RCsc 注释的指令（或其内存操作）。
+术语：与公理化表述不同，在这里每个内存操作要么是加载（load），要么是存储（store）。因此，原子内存操作（AMO）会引发两种不同的内存操作：加载和存储。当与`instruction`结合使用时，术语 `load` 和 `store` 指的是会引发这些内存操作的指令。因此，两者都包括 AMO 指令。术语 `acquire` 指带有 acquire-RCpc 或 acquire-RCsc 注释的指令（或其内存操作）。术语 `release` 指带有 release-RCpc 或 release-RCsc 注释的指令（或其内存操作）。
 
 *模型状态*
 
@@ -427,7 +427,7 @@ empty rmw & (fre;coe) as Atomic
 
 共享内存状态记录了迄今为止所有已生效的内存存储操作，按照它们生效的顺序进行存储（虽然可以通过优化使其更高效，但为了简化展示，我们保持这种方式）。
 
-每个硬件线程状态主要由一棵指令实例树组成，其中一些指令实例已经 _完成_，而另一些尚未完成。未完成的指令实例可能会被 _重启_，例如，当它们依赖于一个乱序执行或推测执行的加载操作，而该加载操作最终被判定为无效时。
+每个硬件线程状态主要由一棵指令实例树组成，其中一些指令实例已经完成，而另一些尚未完成。未完成的指令实例可能会被重启，例如，当它们依赖于一个乱序执行或推测执行的加载操作，而该加载操作最终被判定为无效时。
 
 条件分支和间接跳转指令在指令树中可能有多个后继节点。当此类指令执行完成时，任何未被执行的分支路径都会被丢弃。
 
@@ -560,7 +560,7 @@ empty rmw & (fre;coe) as Atomic
 
 [NOTE]
 ====
-可以观察到， Store_ea 可以在存储的值确定之前发生。例如，为了让操作模型允许试金石测试 LB+fence.r.rw+data-po（如同 RVWMO 一样），Hart 1 中的第一个存储操作必须在其值确定之前执行 Store_ea 步骤，以便第二个存储操作可以看到它是写入到一个不重叠的内存足迹，从而允许第二个存储操作在不违反一致性的情况下乱序提交。
+可以观察到， Store_ea 可以在存储的值确定之前发生。例如，为了让操作模型允许试纸测试 LB+fence.r.rw+data-po（如同 RVWMO 一样），Hart 1 中的第一个存储操作必须在其值确定之前执行 Store_ea 步骤，以便第二个存储操作可以看到它是写入到一个不重叠的内存足迹，从而允许第二个存储操作在不违反一致性的情况下乱序提交。
 
 ====
 每条指令的伪代码最多执行一次存储或加载，除了执行恰好一次加载和一次存储的 AMO （原子内存操作）。然后，这些内存访问随后被硬件线程语义分割成体系结构上原子化的单元，（参见 <<initiate_load, Initiate memory load operations>> 和 <<initiate_store_footprint, Initiate memory store operation footprints>>）。
