@@ -876,6 +876,7 @@ NOTE:  早期草案要求在将 `vtype` 设为非法值时触发异常。然而�
 
 NOTE:  特别地，`vsetvl` 指令的 `vtype` 参数中所有 XLEN 位都必须进行检查。实现不能忽略未实现的字段。必须检查所
 有位，以确保假设 vtype 中不受支持的向量特性的代码不会在较旧的实现上错误执行，而是会触发异常。
+
 ==== AVL 编码
 
 新的向量长度设置基于 AVL，对于 `vsetvli` 和 `vsetvl`，AVL 在 `rs1` 和 `rd` 字段中编码，如下所示：
@@ -2579,15 +2580,12 @@ vfwnmsac.vf vd, rs1, vs2, vm # vd[i] = -(f[rs1] * vs2[i]) + vd[i]
     vfsqrt.v vd, vs2, vm   # 向量-向量平方根  
 ----
 
-==== Vector Floating-Point Reciprocal Square-Root Estimate Instruction
+==== 向量浮点倒数平方根估算指令
 
 ----
     # Floating-point reciprocal square-root estimate to 7 bits.
     vfrsqrt7.v vd, vs2, vm
 ----
-
-
-==== 向量浮点倒数平方根估算指令
 
 这是一个一元向量-向量指令，返回精确到 7 位的 1/√x 估算值。
 
