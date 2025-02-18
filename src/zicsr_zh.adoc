@@ -1,5 +1,5 @@
 [[csrinsts]]
-== "Zicsr" 拓展： 控制状态寄存器（CSR）指令，版本 2.0
+== “Zicsr” 拓展：控制状态寄存器（CSR）指令，版本 2.0
 
 RISC-V 定义了一个与每个硬件线程相关联的 4096 个控制状态寄存器（CSR）的独立地址空间。本章定义了操作这些 CSR 的完整 CSR 指令集。
 
@@ -81,7 +81,7 @@ CSRRWI、CSRRSI 和 CSRRCI 变体类似于 CSRRW、CSRRS 和 CSRRC，但它们�
 
 汇编伪指令读取控制状态寄存器，CSRR _rd, csr_，编码为 CSRRS _rd, csr, x0_。汇编伪指令写入控制状态寄存器，CSRW _csr, rs1_，编码为 CSRRW _x0, csr, rs1_，而 CSRWI _csr, uimm_，编码为 CSRRWI _x0, csr, uimm_。
 
-进一步的汇编伪指令用于在不需要旧值时设置和清除控制状态寄存器中的位：CSRS/CSRC _csr, rs1_; CSRSI/CSRCI _csr, uimm_。
+进一步的汇编伪指令定义为在不需要旧值时设置和清除控制状态寄存器中的位：CSRS/CSRC _csr, rs1_; CSRSI/CSRCI _csr, uimm_。
 
 ==== 控制状态寄存器访问顺序
 
