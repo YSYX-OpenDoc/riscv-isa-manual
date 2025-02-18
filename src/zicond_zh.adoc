@@ -41,7 +41,7 @@ RISC-V 的设计原则（例如，缺乏支持 3 个源寄存器和一个输出�
 
 [NOTE]
 ====
-架构评论：定义额外的比较（除了等于零和不等于零之外）没有好处，因为缺乏立即数或额外的寄存器操作数进行比较。
+架构评论：由于缺乏立即数或额外的寄存器操作数进行比较，定义额外的比较（除了等于零和不等于零之外）没有好处。
 ====
 
 基于这两条指令，支持以下*条件算术*操作的合成指令（即短指令序列）：
@@ -91,8 +91,8 @@ czero.eqz _rd_, _rs1_, _rs2_
 描述::
 如果 _rs2_ 包含值零，则此指令将值零写入 _rd_。否则，此指令将 _rs1_ 的内容复制到 _rd_。
 
-此指令在 _rs1_ 和 _rs2_ 到 _rd_ 之间具有语法依赖性。
-此外，如果实现了 Zkt 扩展，则此指令的时间与 _rs1_ 和 _rs2_ 中的数据值无关。
+此指令在语法上存在 _rs1_ 和 _rs2_ 到 _rd_ 之间的依赖关系。
+此外，如果实现了 Zkt 扩展，则此指令的时序与 _rs1_ 和 _rs2_ 中的数据值无关。
 
 SAIL 代码::
 [source,sail]
@@ -130,7 +130,7 @@ czero.nez _rd_, _rs1_, _rs2_
 描述::
 如果 _rs2_ 包含非零值，则此指令将值零写入 _rd_。否则，此指令将 _rs1_ 的内容复制到 _rd_。
 
-此指令在 _rs1_ 和 _rs2_ 到 _rd_ 之间具有语法依赖性。
+此指令在语法上存在 _rs1_ 和 _rs2_ 到 _rd_ 之间的依赖关系。
 此外，如果实现了 Zkt 扩展，则此指令的时间与 _rs1_ 和 _rs2_ 中的数据值无关。
 
 SAIL 代码::
@@ -154,48 +154,48 @@ SAIL 代码::
 |指令序列
 |长度
 
-|*条件加法，如果为零* +
+|*为零条件加法* +
 `rd = (rc == 0) ? (rs1 + rs2) : rs1`
 |czero.nez  rd, rs2, rc
 add        rd, rs1, rd
 .8+.^|2 条指令
 
-|*条件加法，如果非零* +
+|*非零条件加法* +
 `rd = (rc != 0) ? (rs1 + rs2) : rs1`
 |czero.eqz  rd, rs2, rc
 add        rd, rs1, rd
 
-|*条件减法，如果为零* +
+|*为零条件减法* +
 `rd = (rc == 0) ? (rs1 - rs2) : rs1`
 |czero.nez  rd, rs2, rc
 sub        rd, rs1, rd
 
-|*条件减法，如果非零* +
+|*非零条件减法* +
 `rd = (rc != 0) ? (rs1 - rs2) : rs1`
 |czero.eqz  rd, rs2, rc
 sub        rd, rs1, rd
 
-|*条件按位或，如果为零* +
+|*为零条件按位或* +
 `rd = (rc == 0) ? (rs1 \| rs2) : rs1`
 |czero.nez  rd, rs2, rc
 or         rd, rs1, rd
 
-|*条件按位或，如果非零* +
+|*非零条件按位或* +
 `rd = (rc != 0) ? (rs1 \| rs2) : rs1`
 |czero.eqz  rd, rs2, rc
 or         rd, rs1, rd
 
-|*条件按位异或，如果为零* +
+|*为零条件按位异或* +
 `rd = (rc == 0) ? (rs1 ^ rs2) : rs1`
 |czero.nez  rd, rs2, rc
 xor        rd, rs1, rd
 
-|*条件按位异或，如果非零* +
+|*非零条件按位异或* +
 `rd = (rc != 0) ? (rs1 ^ rs2) : rs1`
 |czero.eqz  rd, rs2, rc
 xor        rd, rs1, rd
 
-|*条件按位与，如果为零* +
+|*为零条件按位与* +
 `rd = (rc == 0) ? (rs1 & rs2) : rs1`
 |and        rd, rs1, rs2
 czero.eqz  rtmp, rs1, rc
@@ -203,19 +203,19 @@ or         rd, rd, rtmp
 .4+.^|3 条指令 +
 （需要 1 个临时寄存器）
 
-|*条件按位与，如果非零* +
+|*非零条件按位与* +
 `rd = (rc != 0) ? (rs1 & rs2) : rs1`
 |and        rd, rs1, rs2
 czero.nez  rtmp, rs1, rc
 or         rd, rd, rtmp
 
-|*条件选择，如果为零* +
+|*为零条件选择* +
 `rd = (rc == 0) ? rs1 : rs2`
 |czero.nez  rd, rs1, rc
 czero.eqz  rtmp, rs2, rc
 or         rd, rd, rtmp
 
-|*条件选择，如果非零* +
+|*非零条件选择* +
 `rd = (rc != 0) ? rs1 : rs2`
 |czero.eqz  rd, rs1, rc
 czero.nez  rtmp, rs2, rc
