@@ -37,11 +37,7 @@ Zimop 扩展中定义的 MOP 不在语法上要求 `x[rs1]` 或 `x[rs2]` 到 `x[
 
 NOTE: 不包含语法依赖性的简单实现可以不读取 `x[rs1]` 和 `x[rs2]`。
 
-<<<<<<< HEAD
-=== “Zcmop”扩展：压缩可能操作，版本 1.0
-=======
 === "Zcmop"扩展：可能操作的压缩（Compressed May-Be-Operations），版本 1.0
->>>>>>> nidland
 
 本节定义了 "Zcmop" 扩展，它定义了八个 16 位 MOP 指令，名为 C.MOP.__n__，其中 __n__ 是 1 到 15 之间的奇数（包括 1 和 15）。C.MOP.__n__ 被编码在对应于 C.LUI x__n__, 0 的保留编码空间中，如 <<tab:c-mop>> 所示。
 与 Zimop 扩展中定义的 MOP 不同，C.MOP.__n__ 指令被定义为不写入任何寄存器。
