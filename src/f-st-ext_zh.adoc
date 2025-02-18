@@ -329,5 +329,5 @@ include::images/wavedrom/spfloat-classify.adoc[]
 |6 |_rs1_ 是正正规数.
 |7 |_rs1_ 是 latexmath:[$+\infty$].
 |8 |_rs1_ 是信号 NaN.
-|9 |_rs1_ 是安静 NaN.
+|9 |_rs1_ 是静默 NaN.
 |===
