@@ -1,4 +1,4 @@
-== "C" 扩展用于压缩指令，版本 2.0
+== "C" 扩展：压缩指令，版本 2.0
 
 本章描述了 RISC-V 标准压缩指令集扩展，称为 "C"，通过为常见操作添加简短的 16 位指令编码来减少静态和动态代码大小。C 扩展可以添加到任何基本 ISA（RV32、RV64、RV128），我们使用通用术语 "RVC" 来涵盖其中的任何一种。通常，程序中 50%-60% 的 RISC-V 指令可以替换为 RVC 指令，从而实现 25%-30% 的代码大小减少。
 
@@ -328,7 +328,8 @@ include::images/wavedrom/c-ciw.adoc[]
 //.CIW 格式。
 (((compressed, CIW)))
 
-C.ADDI4SPN 是 CIW 格式指令，将零扩展的非零立即数（按 4 缩放）添加到堆栈指针 `x2`，并将结果写入 `rd′`。此指令用于生成指向堆栈分配变量的指针，并扩展为 `addi rd′, x2, nzuimm[9:2]`。当 _nzuimm_≠0 时，C.ADDI4SPN 才有效；_nzuimm_=0 的代码点保留。
+C.ADDI4SPN 是 CIW 格式指令，将零扩展的非零立即数（按 4 缩放）与堆栈指针 `x2` 相加，并将结果写入 `rd′`。此指令用于生成指向堆栈分配变量的指针，并扩展为 `addi rd′, x2, nzuimm[9:2]`。当 _nzuimm_≠0 时，C.ADDI4SPN 才有效；_nzuimm_=0 的代码点保留。
+>>>>>>>>> Temporary merge branch 2
 
 [[c-ci]]
 include::images/wavedrom/c-ci.adoc[]
