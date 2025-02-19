@@ -9,6 +9,7 @@ on:
       - dev_2_1
       - dev_3
       - develop
+      - nidland
   pull_request:
     branches:
       - main
@@ -17,6 +18,11 @@ on:
       - dev_2_1
       - dev_3
       - develop
+<<<<<<< HEAD
+=======
+      - nidland
+
+>>>>>>> f5f39867a89abf0eef873d02dcf3a13784f32db0
 jobs:
   build:
     runs-on: ubuntu-latest
