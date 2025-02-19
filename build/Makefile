@@ -34,7 +34,7 @@ ASCIIDOCTOR_OPTS := -a compress \
                     --require=asciidoctor-bibtex \
                     --require=asciidoctor-diagram \
                     --require=asciidoctor-mathematical \
-					-a scripts=cjk \
+										-a scripts=cjk \
                     --trace
 
 # Source directory

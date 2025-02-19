@@ -3,14 +3,12 @@ font:
   catalog:
     merge: true
     sans-serif: GEM_FONTS_DIR/mplus1p-regular-fallback.ttf 
- #Petrona
     body:
-      normal: Petrona-Light.ttf
-      bold: Petrona-Medium.ttf
-      italic: Petrona-LightItalic.ttf
-      bold_italic: Petrona-MediumItalic.ttf
-      header_thin: Petrona-Thin.ttf
-  #Montserrat
+      normal: NotoSerifSC-Light.ttf
+      bold: NotoSerifSC-Medium.ttf
+      italic: NotoSerifSC-Light.ttf
+      bold_italic: NotoSerifSC-Medium.ttf
+      header_thin: NotoSerifSC-Light.ttf
     headings:
       normal: Montserrat-Regular.ttf
       italic: Montserrat-Italic.ttf
@@ -27,12 +25,6 @@ font:
       bold: mplus-1mn-bold.ttf
       italic: mplus-1mn-light.ttf
       bold_italic: mplus-1mn-medium.ttf
-    NotoSerif Fallback:
-      normal: NotoSerifSC-Light.ttf
-      bold: NotoSerifSC-Medium.ttf
-      italic: NotoSerifSC-Light.ttf
-      bold_italic: NotoSerifSC-Medium.ttf
-      header_thin: NotoSerifSC-Light.ttf
     M+ 1p Fallback:
       normal: mplus-1p-regular-fallback.ttf
       bold: mplus-1p-regular-fallback.ttf
@@ -43,10 +35,17 @@ font:
       italic: droid-sans-fallback.ttf
       bold: droid-sans-fallback.ttf
       bold_italic: droid-sans-fallback.ttf
+    Petrona Fallback:
+      normal: Petrona-Light.ttf
+      bold: Petrona-Medium.ttf
+      italic: Petrona-LightItalic.ttf
+      bold_italic: Petrona-MediumItalic.ttf
+      header_thin: Petrona-Thin.ttf
     # M+ 1p supports Latin, Latin-1 Supplement, Latin Extended, Greek, Cyrillic, Vietnamese, Japanese & an assortment of symbols
     # It also provides arrows for ->, <-, => and <= replacements in case these glyphs are missing from font
   fallbacks:
-    - NotoSerif Fallback
+    - body
+    - Petrona Fallback
     - M+ 1p Fallback
     - Droid Fallback
   svg:
@@ -60,7 +59,7 @@ page:
   margin_outer: 0.59in
   size: A4
 base:
-  font-family: body
+  font_family: body
   font_size: 11.5
   line_height_length: 12
   font_style: normal
