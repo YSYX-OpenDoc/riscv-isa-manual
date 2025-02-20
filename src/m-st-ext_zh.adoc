@@ -8,7 +8,7 @@
 我们将整数乘法和除法从基础架构中分离出来，以简化轻量级实现，或适用于那些整数乘法和除法操作较为罕见或更适合由附加加速器处理的应用。
 ====
 
-=== 乘法操作
+=== 乘法操作（Multiplication Operations）
 
 include::images/wavedrom/m-st-ext-for-int-mult.adoc[]
 [[m-st-ext-for-int-mult]]
@@ -17,8 +17,7 @@ include::images/wavedrom/m-st-ext-for-int-mult.adoc[]
 (((MUL, MULHU)))
 (((MUL, MULHSU)))
 
-MUL 执行 _rs1_ 乘以 _rs2_ 的 XLEN 位×XLEN 位乘法，并将低 XLEN 位放入目标寄存器。MULH、MULHU 和 MULHSU 执行相同的乘法，但返回完整 2×XLEN 位乘积的高 XLEN 位，分别用于有符号×有符号、无符号×无符号和 _rs1_×无符号 _rs2_ 乘法。
-如果需要同一乘积的高位和低位，则推荐的代码序列是：MULH[[S]U] _rdh, rs1, rs2_; MUL _rdl, rs1, rs2_（源寄存器说明符必须相同顺序，且 _rdh_ 不能与 _rs1_ 或 _rs2_ 相同）。微架构可以将这些融合为单个乘法操作，而不是执行两个独立的乘法。
+MUL 执行 _rs1_ 乘以 _rs2_ 的 XLEN 位×XLEN 位乘法，并将低 XLEN 位放入目标寄存器。MULH、MULHU 和 MULHSU 执行相同的乘法，但返回完整 2×XLEN 位乘积的高 XLEN 位，分别用于有符号×有符号、无符号×无符号和 _rs1_×无符号 _rs2_ 乘法。如果需要同一乘积的高位和低位，则推荐的代码序列是：MULH[[S]U] _rdh, rs1, rs2_; MUL _rdl, rs1, rs2_（源寄存器说明符必须相同顺序，且 _rdh_ 不能与 _rs1_ 或 _rs2_ 相同）。微架构可以将这些融合为单个乘法操作，而不是执行两个独立的乘法。
 
 [NOTE]
 ====
@@ -32,7 +31,7 @@ MULW 是一个 RV64 指令，它将源寄存器的低 32 位相乘，并将结�
 在 RV64 中，MUL 可用于获取 64 位乘积的高 32 位，但有符号参数必须是正确的 32 位有符号值，而无符号参数的高 32 位必须清零。如果参数不确定是否已符号或零扩展，可以将两个参数都左移 32 位，然后使用 MULH[[S]U]。
 ====
 
-=== 除法操作
+=== 除法操作（Division Operations）
 
 include::images/wavedrom/division-op.adoc[]
 [[division-op]]
@@ -84,7 +83,7 @@ latexmath:[$-1$] |latexmath:[$2^{L}-1$] +
 
 === “Zmmul” 扩展：版本 1.0
 
-Zmmul 扩展实现了 M 扩展的乘法子集。它添加了 <<Multiplication Operations>> 中定义的所有指令，即：MUL、MULH、MULHU、MULHSU 和（仅适用于 RV64）MULW。编码与相应的 M 扩展指令相同。M 包含 Zmmul。
+Zmmul 扩展实现了 M 扩展的乘法子集。它添加了 <<乘法操作（Multiplication Operations）>> 中定义的所有指令，即：MUL、MULH、MULHU、MULHSU 和（仅适用于 RV64）MULW。编码与相应的 M 扩展指令相同。M 包含 Zmmul。
 (((MUL, Zmmul)))
 
 [NOTE]

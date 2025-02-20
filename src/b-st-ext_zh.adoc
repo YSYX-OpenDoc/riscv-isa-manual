@@ -3692,7 +3692,7 @@ strlen:
     not	a2, a2
     /*
      * 字符串中的非 NUL 字节已扩展为 0x00，而 NUL 字节已变为 0xff。搜索第一个设置的位
-     * （对应于原始数据块中的 NUL 字节）。
+     * （对应于初始数据块中的 NUL 字节）。
      */
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     ctz     a2, a2

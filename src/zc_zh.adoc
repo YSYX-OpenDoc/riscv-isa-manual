@@ -1131,7 +1131,7 @@ EMBench 基准 picojpeg 中的函数 _processMarkers_ 在以下文件中：https
    10866:       bcfa                    cm.popretz {ra,s0-s11}, 96
 ----
 
-序言/尾声从原始代码中的 60 字节减少到 14 字节，使用 _-msave-restore_，
+序言/尾声从初始代码中的 60 字节减少到 14 字节，使用 _-msave-restore_，
 并使用 PUSH 和 POPRET 减少到 4 字节。
 除了减少代码大小外，PUSH 和 POPRET 还消除了调用 millicode _save/restore_ 例程的分支，因此可能表现更好。
 
