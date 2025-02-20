@@ -137,7 +137,7 @@ retry:
 # 队列使用的数据结构：
 #   structure pointer_t {ptr:   node_t *, count: uint64_t}
 #   structure node_t    {next: pointer_t, value: data type}
-#   structure构 queue_t   {Head: pointer_t, Tail:  pointer_t}
+#   structure queue_t   {Head: pointer_t, Tail:  pointer_t}
 # 过程的输入：
 #   a0 - Tail 变量的地址
 #   a4 - 要插入到尾部的新节点的地址
