@@ -2,7 +2,7 @@
 
 === 介绍
 
-比较并交换（CAS）指令提供了一种简单且通常更快的方式来执行线程同步操作，当作为硬件指令支持时。CAS 通常用于无锁和无等待算法中。本扩展提议 CAS 指令操作 32 位、64 位和 128 位（仅限 RV64）数据值。CAS 指令支持 C++11 原子比较和交换操作。
+比较并交换（CAS）指令提供了一种简单且通常更快的方式来执行线程同步操作，当作为硬件指令支持时。CAS 通常用于无锁（lock-free）和无等待算法（wait-free algorithms）中。本扩展提议 CAS 指令操作 32 位、64 位和 128 位（仅限 RV64）数据值。CAS 指令支持 C++11 原子比较和交换操作。
 
 虽然可以使用 LR/SC 实现 XLEN 宽数据的比较并交换，但 CAS 原子指令在高度并行系统中比 LR/SC 更具扩展性。许多无锁算法，例如无锁队列，需要操作指针变量。简单的 CAS 操作可能不足以防止在操作指针变量的算法中出现常见的 ABA 问题。为避免 ABA 问题，算法将引用计数器与指针变量相关联，并使用四字比较并交换（同时操作指针和计数器）进行更新。双字和四字 CAS 指令都支持实现避免 ABA 问题的算法。
 
@@ -117,7 +117,7 @@ retry:
 
 与 A 扩展中的 AMO 一样，`AMOCAS.W/D/Q` 可选地提供释放一致性语义，使用 `aq` 和 `rl` 位，以帮助实现多处理器同步。当 `aq` 位为 1 时，`AMOCAS.W/D/Q` 成功执行的内存操作具有获取语义；当 `rl` 位为 1 时，具有释放语义。当 `AMOCAS.W/D/Q` 不成功时，内存操作具有获取语义（如果 `aq` 位为 1），但不具有释放语义（无论 `rl` 位如何）。
 
-可以使用 FENCE 指令来排序 `AMOCAS.W/D/Q` 指令产生的内存读访问和（如果产生）内存写访问。
+可以使用 FENCE 指令来排序 `AMOCAS.W/D/Q` 指令产生的内存读访问和（如果生成的）内存写访问。
 
 [NOTE]
 ====
@@ -130,14 +130,14 @@ retry:
 
 [NOTE]
 ====
-以下示例代码序列说明了使用 `AMOCAS.Q` 实现无阻塞并发队列的 _enqueue_ 操作，使用 cite:[queue] 中概述的算法。该算法使用 `AMOCAS.Q` 指令原子性地操作指针及其关联的修改计数器，以避免 ABA 问题。
+以下示例代码序列说明了使用 `AMOCAS.Q` 实现无阻塞并发队列的 _enqueue_ 操作，使用 cite:[queue] 中概述的算法。该算法使用 `AMOCAS.Q` 指令原子性地操作指针及其关联的修改计数器（modification counter），以避免 ABA 问题。
 
 [listing]
 # 无阻塞并发队列的入队操作。
 # 队列使用的数据结构：
-#   结构 pointer_t {ptr:   node_t *, count: uint64_t}
-#   结构 node_t    {next: pointer_t, value: data type}
-#   结构 queue_t   {Head: pointer_t, Tail:  pointer_t}
+#   structure pointer_t {ptr:   node_t *, count: uint64_t}
+#   structure node_t    {next: pointer_t, value: data type}
+#   structure构 queue_t   {Head: pointer_t, Tail:  pointer_t}
 # 过程的输入：
 #   a0 - Tail 变量的地址
 #   a4 - 要插入到尾部的新节点的地址
