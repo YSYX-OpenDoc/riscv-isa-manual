@@ -125,7 +125,7 @@ Zcb 具有简单的代码大小节省指令，易于在所有 CPU 上实现。
 
 所有编码目前保留给所有架构，并且与任何现有扩展没有冲突。
 
-注意: Zcb 可以在任何 CPU 上实现，因为这些指令是现有 32 位指令的 16 位版本，来自应用类配置文件。
+NOTE: Zcb 可以在任何 CPU 上实现，因为这些指令是现有 32 位指令的 16 位版本，来自应用类配置文件。
 
 Zcb 扩展依赖于 <<Zca>> 扩展。
 
@@ -215,7 +215,7 @@ Zcmp 扩展是一组指令，可以作为一系列现有的 32 位 RISC-V 指令
 
 该扩展重用了部分来自 c.fsdsp 的编码。因此，它与 <<Zcd>> 不兼容，而 Zcd 是在同时存在 C 扩展和 D 扩展时包含的。
 
-注意: 由于实现复杂性 Zcmp 主要针对嵌入式 CPU。此外，它与架构类配置文件不兼容。
+NOTE: 由于实现复杂性 Zcmp 主要针对嵌入式 CPU。此外，它与架构类配置文件不兼容。
 
 Zcmp 扩展依赖于 <<Zca>> 扩展。
 
@@ -275,7 +275,7 @@ Zcmt 添加了表跳转指令，并添加了 jvt 控制状态寄存器。如果�
 
 该扩展重用了部分来自 c.fsdsp 的编码。因此，它与 <<Zcd>> 不兼容，而 Zcd 是在同时存在 C 扩展和 D 扩展时包含的。
 
-注意：由于实现复杂性，Zcmt 主要针对嵌入式类别的 CPU。此外，它与 RVA 配置文件不兼容。
+NOTE: 由于实现复杂性，Zcmt 主要针对嵌入式类别的 CPU。此外，它与 RVA 配置文件不兼容。
 
 Zcmt 扩展依赖于 <<Zca>> 和 Zicsr 扩展。
 
@@ -326,7 +326,7 @@ c.mul 使用现有的 CA 格式。
 [#Zcb_instructions]
 === Zcb 指令
 
-[#insns-c_lbu,reftext=“加载无符号字节，16 位编码”]
+[#insns-c_lbu,reftext="加载无符号字节，16 位编码"]
 ==== c.lbu
 
 简述：
@@ -385,7 +385,7 @@ X(rdc) = EXTZ(mem[X(rs1c)+EXTZ(uimm)][7..0]);
 ----
 
 <<<
-[#insns-c_lhu,reftext=“加载无符号半字，16 位编码”]
+[#insns-c_lhu,reftext="加载无符号半字，16 位编码"]
 ==== c.lhu
 
 简述：
@@ -446,7 +446,7 @@ X(rdc) = EXTZ(load_mem[X(rs1c)+EXTZ(uimm)][15..0]);
 --
 
 <<<
-[#insns-c_lh,reftext=“加载有符号半字，16 位编码”]
+[#insns-c_lh,reftext="加载有符号半字，16 位编码"]
 ==== c.lh
 
 简述：
@@ -507,7 +507,7 @@ X(rdc) = EXTS(load_mem[X(rs1c)+EXTZ(uimm)][15..0]);
 ----
 
 <<<
-[#insns-c_sb,reftext=“存储字节，16 位编码”]
+[#insns-c_sb,reftext="存储字节，16 位编码"]
 ==== c.sb
 
 简述：
@@ -568,7 +568,7 @@ mem[X(rs1c)+EXTZ(uimm)][7..0] = X(rs2c)
 --
 
 <<<
-[#insns-c_sh,reftext=“存储半字，16 位编码”]
+[#insns-c_sh,reftext="存储半字，16 位编码"]
 ==== c.sh
 
 简述：
@@ -629,7 +629,7 @@ mem[X(rs1c)+EXTZ(uimm)][15..0] = X(rs2c)
 ----
 
 <<<
-[#insns-c_zext_b,reftext=“零扩展字节，16 位编码”]
+[#insns-c_zext_b,reftext="零扩展字节，16 位编码"]
 ==== c.zext.b
 
 简述：
@@ -687,7 +687,7 @@ X(rsdc) = EXTZ(X(rsdc)[7..0]);
 ----
 
 <<<
-[#insns-c_sext_b,reftext=“符号扩展字节，16 位编码”]
+[#insns-c_sext_b,reftext="符号扩展字节，16 位编码"]
 ==== c.sext.b
 
 简述：
@@ -741,7 +741,7 @@ X(rsdc) = EXTS(X(rsdc)[7..0]);
 ----
 
 <<<
-[#insns-c_zext_h,reftext=“零扩展半字，16 位编码”]
+[#insns-c_zext_h,reftext="零扩展半字，16 位编码"]
 ==== c.zext.h
 
 简述：
@@ -796,7 +796,7 @@ X(rsdc) = EXTZ(X(rsdc)[15..0]);
 ----
 
 <<<
-[#insns-c_sext_h,reftext=“符号扩展半字，16 位编码”]
+[#insns-c_sext_h,reftext="符号扩展半字，16 位编码"]
 ==== c.sext.h
 
 简述：
@@ -851,7 +851,7 @@ X(rsdc) = EXTS(X(rsdc)[15..0]);
 ----
 
 <<<
-[#insns-c_zext_w,reftext=“零扩展字，16 位编码”]
+[#insns-c_zext_w,reftext="零扩展字，16 位编码"]
 ==== c.zext.w
 
 简述：
@@ -909,7 +909,7 @@ X(rsdc) = EXTZ(X(rsdc)[31..0]);
 ----
 
 <<<
-[#insns-c_not,reftext=“按位取反，16 位编码”]
+[#insns-c_not,reftext="按位取反，16 位编码"]
 ==== c.not
 
 简述：
@@ -967,7 +967,7 @@ X(rsdc) = X(rsdc) XOR -1;
 ----
 
 <<<
-[#insns-c_mul,reftext=“乘法，16 位编码”]
+[#insns-c_mul,reftext="乘法，16 位编码"]
 ==== c.mul
 
 简述：
@@ -1024,7 +1024,7 @@ X(rsdc) = result_wide[(sizeof(xlen) - 1) .. 0];
 
 <<<
 
-[#insns-pushpop,reftext=“PUSH/POP 寄存器指令”]
+[#insns-pushpop,reftext="PUSH/POP 寄存器指令"]
 === PUSH/POP 寄存器指令
 
 这些指令统称为 PUSH/POP：
@@ -1131,7 +1131,7 @@ EMBench 基准 picojpeg 中的函数 _processMarkers_ 在以下文件中：https
    10866:       bcfa                    cm.popretz {ra,s0-s11}, 96
 ----
 
-序言/尾声从初始代码中的 60 字节减少到 14 字节，使用 _-msave-restore_，
+序言/尾声从原始代码中的 60 字节减少到 14 字节，使用 _-msave-restore_，
 并使用 PUSH 和 POPRET 减少到 4 字节。
 除了减少代码大小外，PUSH 和 POPRET 还消除了调用 millicode _save/restore_ 例程的分支，因此可能表现更好。
 
@@ -1163,7 +1163,7 @@ POP 通常用于尾调用序列中，在销毁堆栈帧后，_ret_ 不用于返�
 
 如果在序列执行过程中发生陷阱，_xEPC_ 将更新为指令的 PC，_xTVAL_（如果不是只读零）将更新为错误地址（如果是访问异常），并且 _xCAUSE_ 将更新为陷阱类型。
 
-注意：是否可以在序列执行过程中处理中断是由实现定义的。
+NOTE: 是否可以在序列执行过程中处理中断是由实现定义的。
 
 [#pushpop-software-view]
 ==== 执行的软件视图
@@ -1360,7 +1360,7 @@ addi sp, sp, 64;
 ----
 
 <<<
-[#insns-cm_push,reftext=“cm.push”]
+[#insns-cm_push,reftext="cm.push"]
 ==== cm.push
 
 简述：
@@ -1553,7 +1553,7 @@ sp-=stack_adj;
 ----
 
 <<<
-[#insns-cm_pop,reftext=“cm.pop”]
+[#insns-cm_pop,reftext="cm.pop"]
 ==== cm.pop
 
 简述：
@@ -1746,7 +1746,7 @@ sp+=stack_adj;
 ----
 
 <<<
-[#insns-cm_popretz,reftext=“cm.popretz”]
+[#insns-cm_popretz,reftext="cm.popretz"]
 ==== cm.popretz
 
 简述：
@@ -1945,7 +1945,7 @@ asm("ret");
 ----
 
 <<<
-[#insns-cm_popret,reftext=“cm.popret”]
+[#insns-cm_popret,reftext="cm.popret"]
 ==== cm.popret
 
 简述：
@@ -2139,7 +2139,7 @@ asm("ret");
 
 <<<
 
-[#insns-cm_mvsa01,reftext=“将 a0-a1 移动到两个不同的 s0-s7 寄存器”]
+[#insns-cm_mvsa01,reftext="将 a0-a1 移动到两个不同的 s0-s7 寄存器"]
 ==== cm.mvsa01
 
 简述：
@@ -2212,7 +2212,7 @@ X[xreg2] = X[11];
 
 <<<
 
-[#insns-cm_mva01s,reftext=“将两个 s0-s7 寄存器移动到 a0-a1”]
+[#insns-cm_mva01s,reftext="将两个 s0-s7 寄存器移动到 a0-a1"]
 ==== cm.mva01s
 
 简述：
@@ -2280,7 +2280,7 @@ X[11] = X[xreg2];
 
 <<<
 
-[#insns-tablejump,reftext=“表跳转概述”]
+[#insns-tablejump,reftext="表跳转概述"]
 === 表跳转概述
 
 _cm.jt_ (<<#insns-cm_jt>>) 和 _cm.jalt_ (<<#insns-cm_jalt>>) 被称为表跳转。
@@ -2324,7 +2324,7 @@ _cm.jt_ 和 _cm.jalt_ 编码索引表，允许访问整个 XLEN 宽地址空间�
 如果在任一指令获取上发生异常，xEPC 设置为表跳转指令的 PC，xCAUSE 设置为预期的故障类型，如果 xTVAL 未设置为零，则包含导致故障的获取地址。
 
 <<<
-[#csrs-jvt,reftext=“jvt CSR，表跳转基向量和控制寄存器”]
+[#csrs-jvt,reftext="jvt CSR，表跳转基向量和控制寄存器"]
 ==== jvt 控制状态寄存器
 
 简述：
@@ -2394,7 +2394,7 @@ _jvt_ 控制状态寄存器向系统软件上下文（如操作系统进程）�
 如果实现了 Smstateen 扩展，则在 _mstateen0_、_sstateen0_ 和 _hstateen0_ 中实现第 2 位。如果控制 _stateen0_ CSR 的第 2 位为零，则较低特权级别访问 _jvt_ CSR 和执行 _cm.jalt_ 或 _cm.jt_ 指令会导致非法指令陷阱（或适当时，虚拟指令陷阱）。
 
 <<<
-[#insns-cm_jt,reftext=“通过表跳转”]
+[#insns-cm_jt,reftext="通过表跳转"]
 ==== cm.jt
 
 简述：
@@ -2450,7 +2450,7 @@ _cm.jt_ 从内存中的跳转向量表读取一个条目并跳转到读取的地
 
 <<<
 
-[#insns-cm_jt-SAIL,reftext=“cm.jt SAIL 代码”]
+[#insns-cm_jt-SAIL,reftext="cm.jt SAIL 代码"]
 操作：
 
 [source,sail]
@@ -2473,7 +2473,7 @@ j target_address[XLEN-1:0]&~0x1;
 ----
 
 <<<
-[#insns-cm_jalt,reftext=“通过表跳转并链接”]
+[#insns-cm_jalt,reftext="通过表跳转并链接"]
 ==== cm.jalt
 
 简述：
@@ -2529,7 +2529,7 @@ _cm.jalt_ 从内存中的跳转向量表读取一个条目并跳转到读取的�
 
 <<<
 
-[#insns-cm_jalt-SAIL,reftext=“cm.jalt SAIL 代码”]
+[#insns-cm_jalt-SAIL,reftext="cm.jalt SAIL 代码"]
 操作：
 
 [source,sail]
