@@ -50,17 +50,9 @@
 ==== Sail 规范
 
 RISC-V 维护一个
-link:https://github.com/riscv/sail-riscv[正式模型]
-的 ISA 规范，
-使用 Sail ISA 规范语言实现
-cite:[sail]。
-请注意，_Sail_ 指的是规范语言本身，
-并且有一个 _RISC-V 模型_，使用 Sail 编写。
-不正确地称之为 "Sail 模型" 是不明确的，因为有许多使用 Sail 实现的不同 ISA 模型。我们将 RISC-V 的 Sail 实现称为
-"RISC-V Sail 模型"。
+link:https://github.com/riscv/sail-riscv[正式模型] 的 ISA 规范，使用 Sail ISA 规范语言实现 cite:[sail]。请注意，_Sail_ 指的是规范语言本身，并且有一个 RISC-V 模型，使用 Sail 编写。不正确地称之为“Sail 模型”是不明确的，因为有许多使用 Sail 实现的不同 ISA 模型。我们将 RISC-V 的 Sail 实现称为“RISC-V Sail 模型”。
 
-密码学扩展使用来自实际模型的内联 Sail 代码片段来提供指令功能的规范描述。每个指令都附有其在 Sail 中的表达式，并包括对支持函数的调用，这些函数过于冗长，无法直接包含于规范中。
-这些支持代码列在<<crypto_scalar_appx_sail>>。推荐阅读 link:https://github.com/rems-project/sail/blob/sail2/manual.pdf[Sail 手册] 以便最好地理解代码片段。
+密码学扩展使用来自实际模型的内联 Sail 代码片段来提供指令功能的规范描述。每个指令都附有其在 Sail 中的表达式，并包括对支持函数的调用，这些函数过于冗长，无法直接包含于规范中。这些支持代码列在<<crypto_scalar_appx_sail>>。推荐阅读 link:https://github.com/rems-project/sail/blob/sail2/manual.pdf[Sail 手册] 以便最好地理解代码片段。
 
 请注意，本文档仅包含正式模型的一个子集：请参阅正式模型 Github link:https://github.com/riscv/sail-riscv[存储库] 以获取完整模型。
 
