@@ -42,7 +42,7 @@ RISC-V ISA 的标准扩展使用其他保留字母，例如“Q”表示四倍�
 
 “Z”后的首字母通常表示最相关的扩展类别（如 IMAFDQCVH）。例如，“Zfa”扩展表示附加浮点指令，其中字母“f”表示与“F”标准扩展相关。若命名多个“Z”扩展，应按类别排序，且在每个类别内按字母顺序排列，如“Zicsr_Zifencei_Zam”。
 
-所有多字母扩展，包括带有“Z”前缀的扩展，必须用下划线与其他扩展分隔，例如“RV32IMACZicsr_Zifencei”。
+所有多字母扩展（multi-letter extensions），包括带有“Z”前缀的扩展，必须用下划线与其他扩展分隔，例如“RV32IMACZicsr_Zifencei”。
 
 === 监督级指令集扩展
 

@@ -3,7 +3,9 @@
 
 RISC-V 项目的目标之一是为软件开发提供一个稳定的开发环境。为实现这一目标，我们定义了基础 ISA（RV32I 或 RV64I），并通过添加选定的标准扩展（IMAFD、Zicsr、Zifencei），形成了“通用”ISA。我们用缩写 G 来表示 IMAFDZicsr_Zifencei 指令集扩展的组合。本章将展示了 RV32G 和 RV64G 的操作码映射及其指令集清单。
 
+// note: &#8805; is unicode for >=
 [[opcodemap]]
+.RISC-V 基本操作码映射, inst[1:0]=11
 [%autowidth.stretch,float="center",align="center",cols=  ">.^4m,  ^.^4m,    ^.^4m,      ^.^4m,    ^.^4m,  ^.^4m,      ^.^4m,           ^.^6m, ^.^4h"]
 |===
 |inst[4:2] .2+|000 .2+|001   .2+|010     .2+|011   .2+|100 .2+|101     .2+|110          .2+|111 (>32b)
