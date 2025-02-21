@@ -1,7 +1,7 @@
 :stem: latexmath
 
 [[single-float]]
-== "F" 扩展用于单精度浮点，版本 2.2
+== "F" 扩展：单精度浮点，版本 2.2
 
 本章描述了用于单精度浮点的标准指令集扩展，称为 "F"。该扩展增加了符合 IEEE 754-2008 算术标准的单精度浮点计算指令 cite:[ieee754-2008] 。F 扩展依赖于 "Zicsr" 扩展，用于访问控制状态寄存器。
 
@@ -65,9 +65,9 @@ F 扩展新增了 32 个浮点寄存器（f0-f31），每个寄存器宽度为 3
 .浮点控制状态寄存器
 include::images/wavedrom/float-csr.adoc[]
 
-`fcsr` 寄存器可以通过 FRCSR 和 FSCSR 指令进行读写，这些指令是基于底层 CSR 访问指令的汇编伪指令。FRCSR 通过将 `fcsr` 复制到整数寄存器 _rd_ 来读取 `fcsr`。FSCSR 通过将 `fcsr` 的原始值复制到整数寄存器 _rd_，然后将从整数寄存器 _rs1_ 获取的新值写入 `fcsr`，从而交换 `fcsr` 的值。
+`fcsr` 寄存器可以通过 FRCSR 和 FSCSR 指令进行读写，这些指令是基于底层 CSR 访问指令的汇编伪指令。FRCSR 通过将 `fcsr` 复制到整数寄存器 _rd_ 来读取 `fcsr`。FSCSR 通过将 `fcsr` 的初始值复制到整数寄存器 _rd_，然后将从整数寄存器 _rs1_ 获取的新值写入 `fcsr`，从而交换 `fcsr` 的值。
 
-`fcsr` 内的各个字段也可以通过不同的 CSR 地址单独访问，并且为这些访问定义了单独的汇编伪指令。FRRM 指令读取舍入模式字段 `frm`（`fcsr` 的第 7 至 5 位），并将其复制到整数寄存器 _rd_ 的最低三位，其他位填充为零。FSRM 交换 `frm` 的值，它先将 `frm` 的原始值复制到整数寄存器 _rd_，然后将整数寄存器 _rs1_ 的最低三位写入 `frm`。FRFLAGS 和 FSFLAGS 的定义方式与累积异常标志字段 `fflags`（`fcsr` 的第 4 至 0 位）类似。
+`fcsr` 内的各个字段也可以通过不同的 CSR 地址单独访问，并且为这些访问定义了单独的汇编伪指令。FRRM 指令读取舍入模式字段 `frm`（`fcsr` 的第 7 至 5 位），并将其复制到整数寄存器 _rd_ 的最低三位，其他位填充为零。FSRM 交换 `frm` 的值，它先将 `frm` 的初始值复制到整数寄存器 _rd_，然后将整数寄存器 _rs1_ 的最低三位写入 `frm`。FRFLAGS 和 FSFLAGS 的定义方式与累积异常标志字段 `fflags`（`fcsr` 的第 4 至 0 位）类似。
 
 `fcsr` 的第 31 至 8 位保留用于其他标准扩展。如果这些扩展不存在，实现应忽略对这些位的写入，并在读取时返回零值。标准软件应当保留这些位的内容。
 
@@ -182,7 +182,7 @@ FLW 和 FSW 在传输数据时不会修改任何位，特别是会完整保留�
 
 所有执行舍入的浮点运算都可以使用 _rm_ 字段来选择舍入模式，其编码如 <<rm>> 所示。
 
-浮点最小数和最大数指令 FMIN.S 和 FMAX.S 分别将 _rs1_ 和 _rs2_ 中较小或较大的值 写入 _rd_。仅针对这些指令，值 latexmath:[$-0.0$] 被认为小于值 latexmath:[$+0.0$]。如果两个输入都是 NaN，则结果为规范 NaN（Canonical NaN）。如果只有一个操作数是 NaN，则结果为非 NaN 的那个操作数。如果输入的是信号 NaN（Signaling NaN），即使计算结果不是 NaN，也会触发无效操作异常标志（InvalidOperation Exception Flag）。
+浮点最小数和最大数指令 FMIN.S 和 FMAX.S 分别将 _rs1_ 和 _rs2_ 中较小或较大的值写入 _rd_。仅针对这些指令，值 latexmath:[$-0.0$] 被认为小于值 latexmath:[$+0.0$]。如果两个输入都是 NaN，则结果为规范 NaN（Canonical NaN）。如果只有一个操作数是 NaN，则结果为非 NaN 的那个操作数。如果输入的是信号 NaN（Signaling NaN），即使计算结果不是 NaN，也会触发无效操作异常标志（Invalid Operation Exception Flag）。
 
 [NOTE]
 ====

@@ -151,7 +151,7 @@ _本文件基于《The RISC-V Instruction Set Manual, Volume I: User-Level ISA V
 // the colophon allows for a section after the preamble that is part of the frontmatter and therefore not assigned a page number.
 include::colophon_zh.adoc[]
 include::intro_zh.adoc[]
-include::rv32.adoc[]
+include::rv32_zh.adoc[]
 include::rv32e_zh.adoc[]
 include::rv64_zh.adoc[]
 include::rv128_zh.adoc[]

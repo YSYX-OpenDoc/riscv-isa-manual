@@ -25,7 +25,7 @@ all: $(TARGETS)
 # Build with preinstalled docker container; first install it with:
 #   docker pull riscvintl/riscv-docs-base-container-image:latest
 docker:
-	cd .. && docker run -it -v .:/build riscvintl/riscv-docs-base-container-image:latest /bin/sh -c 'cd ./build; make'
+	cd .. && docker run -it -v .:/build ghcr.io/ysyx-opendoc/asciidoctor:latest /bin/sh -c 'cd ./build/build; make'
 
 # Asciidoctor options
 ASCIIDOCTOR_OPTS := -a compress \
@@ -34,7 +34,7 @@ ASCIIDOCTOR_OPTS := -a compress \
                     --require=asciidoctor-bibtex \
                     --require=asciidoctor-diagram \
                     --require=asciidoctor-mathematical \
-					-a scripts=cjk \
+                    -a scripts=cjk \
                     --trace
 
 # Source directory
