@@ -1,4 +1,4 @@
-    .text
+.text
     .balign 4
     .global strlen
 # size_t strlen(const char *str)
