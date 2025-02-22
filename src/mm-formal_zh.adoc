@@ -403,6 +403,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 
 模型状态：一个模型状态由共享内存和一组硬件线程状态组成。
 
+
 ["ditaa",shadows=false, separation=false, fontsize: 14,float="center"]
 ....
 +----------+     +---------+ 

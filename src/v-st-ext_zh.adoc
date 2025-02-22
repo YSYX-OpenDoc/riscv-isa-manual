@@ -1607,37 +1607,39 @@ NOTE: 标准的向量加载指令访问的内存值与目标寄存器元素的�
 
 `vmadc` 和 `vmsbc` 分别将源操作数相加或相减，若掩码（`vm=0`），还可选择加上进位输入或减去借位输入，并将结果写回掩码寄存器 `vd`。如果未掩码（`vm=1`），则没有进位输入或借位输入。这些指令作用于并写回所有体元素，即使被掩码。因为这些指令产生一个掩码值，所以它们总是采用与尾部无关的策略。
 
+
 ----
-# 计算带进位的和。
+ # 计算带进位的和
 
-# vd[i] = vs2[i] + vs1[i] + v0.mask[i]
-vadc.vvm   vd, vs2, vs1, v0  # 向量-向量
+ # vd[i] = vs2[i] + vs1[i] + v0.mask[i]
+ vadc.vvm   vd, vs2, vs1, v0  # 向量-向量
 
-# vd[i] = vs2[i] + x[rs1] + v0.mask[i]
-vadc.vxm   vd, vs2, rs1, v0  # 向量-标量
+ # vd[i] = vs2[i] + x[rs1] + v0.mask[i]
+ vadc.vxm   vd, vs2, rs1, v0  # 向量-标量
 
-# vd[i] = vs2[i] + imm + v0.mask[i]
-vadc.vim   vd, vs2, imm, v0  # 向量-立即数
+ # vd[i] = vs2[i] + imm + v0.mask[i]
+ vadc.vim   vd, vs2, imm, v0  # 向量-立即数
 
-# 计算掩码寄存器格式的进位输出
+ # 计算掩码寄存器格式的进位输出
 
-# vd.mask[i] = carry_out(vs2[i] + vs1[i] + v0.mask[i])
-vmadc.vvm   vd, vs2, vs1, v0  # 向量-向量
+ # vd.mask[i] = carry_out(vs2[i] + vs1[i] + v0.mask[i])
+ vmadc.vvm   vd, vs2, vs1, v0  # 向量-向量
 
-# vd.mask[i] = carry_out(vs2[i] + x[rs1] + v0.mask[i])
-vmadc.vxm   vd, vs2, rs1, v0  # 向量-标量
+ # vd.mask[i] = carry_out(vs2[i] + x[rs1] + v0.mask[i])
+ vmadc.vxm   vd, vs2, rs1, v0  # 向量-标量
 
-# vd.mask[i] = carry_out(vs2[i] + imm + v0.mask[i])
-vmadc.vim   vd, vs2, imm, v0  # 向量-立即数
+ # vd.mask[i] = carry_out(vs2[i] + imm + v0.mask[i])
+ vmadc.vim   vd, vs2, imm, v0  # 向量-立即数
 
-# vd.mask[i] = carry_out(vs2[i] + vs1[i])
-vmadc.vv    vd, vs2, vs1      # 向量-向量, 无进位输入
+ # vd.mask[i] = carry_out(vs2[i] + vs1[i])
+ vmadc.vv    vd, vs2, vs1      # 向量-向量, 无进位输入
 
-# vd.mask[i] = carry_out(vs2[i] + x[rs1])
-vmadc.vx    vd, vs2, rs1      # 向量-标量, 无进位输入
+ # vd.mask[i] = carry_out(vs2[i] + x[rs1])
+ vmadc.vx    vd, vs2, rs1      # 向量-标量, 无进位输入
 
-# vd.mask[i] = carry_out(vs2[i] + imm)
-vmadc.vi    vd, vs2, imm      # 向量-立即数, 无进位输入
+
+ # vd.mask[i] = carry_out(vs2[i] + imm)
+ vmadc.vi    vd, vs2, imm      # 向量-立即数, 无进位输入
 ----
 
 因为实现进位传播需要执行两条指令且输入不变，所以破坏性累加将需要额外的移动操作才能获得正确的结果。
@@ -2084,22 +2086,22 @@ NOTE: 对于 `vasub`，只有在使用 `rnu` 或 `rne` 舍入模式时，从最�
 # 平均加法
 
 # 无符号整数的平均加法
-vaaddu.vv vd, vs2, vs1, vm # roundoff_unsigned(vs2[i] + vs1[i], 1)
-vaaddu.vx vd, vs2, rs1, vm # roundoff_unsigned(vs2[i] + x[rs1], 1)
+vaaddu.vv vd, vs2, vs1, vm   # roundoff_unsigned(vs2[i] + vs1[i], 1)
+vaaddu.vx vd, vs2, rs1, vm   # roundoff_unsigned(vs2[i] + x[rs1], 1)
 
 # 有符号整数的平均加法
-vaadd.vv vd, vs2, vs1, vm # roundoff_signed(vs2[i] + vs1[i], 1)
-vaadd.vx vd, vs2, rs1, vm # roundoff_signed(vs2[i] + x[rs1], 1)
+vaadd.vv vd, vs2, vs1, vm   # roundoff_signed(vs2[i] + vs1[i], 1)
+vaadd.vx vd, vs2, rs1, vm   # roundoff_signed(vs2[i] + x[rs1], 1)
 
 # 平均减法
 
 # 无符号整数的平均减法
-vasubu.vv vd, vs2, vs1, vm # roundoff_unsigned(vs2[i] - vs1[i], 1)
-vasubu.vx vd, vs2, rs1, vm # roundoff_unsigned(vs2[i] - x[rs1], 1)
+vasubu.vv vd, vs2, vs1, vm   # roundoff_unsigned(vs2[i] - vs1[i], 1)
+vasubu.vx vd, vs2, rs1, vm   # roundoff_unsigned(vs2[i] - x[rs1], 1)
 
 # 有符号整数的平均减法
-vasub.vv vd, vs2, vs1, vm # roundoff_signed(vs2[i] - vs1[i], 1)
-vasub.vx vd, vs2, rs1, vm # roundoff_signed(vs2[i] - x[rs1], 1)
+vasub.vv vd, vs2, vs1, vm   # roundoff_signed(vs2[i] - vs1[i], 1)
+vasub.vx vd, vs2, rs1, vm   # roundoff_signed(vs2[i] - x[rs1], 1)
 ----
 
 ==== 向量单宽度带舍入与饱和的分数乘法
@@ -2935,10 +2937,10 @@ NOTE: 软件可以假设任何负值（最高位被设置）表示未找到元�
 以下是一个向量化数据依赖退出循环的示例。
 
 ----
-include::example/strcpy.s[lines=4..-1]
+include::example/strcpy_zh.s[lines=4..-1]
 ----
 ----
-include::example/strncpy.s[lines=4..-1]
+include::example/strncpy_zh.s[lines=4..-1]
 ----
 
 ==== 向量 Iota 指令
