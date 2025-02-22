@@ -1,5 +1,5 @@
 [[ztso]]
-== “Ztso” 扩展：总存储排序扩展，版本 1.0
+== “Ztso”扩展：总存储排序扩展，版本 1.0
 
 本章定义了用于 RISC-V 总存储序（RVTSO）内存一致性模型的 “Ztso” 扩展。RVTSO 被定义为 RVWMO 模型的增量式扩展，RVWMO 的具体定义见 <<rvwmo>> 章节。
 [NOTE]
