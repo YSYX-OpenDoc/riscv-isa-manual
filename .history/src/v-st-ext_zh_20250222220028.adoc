@@ -325,12 +325,10 @@ NOTE: 可以通过单个 csrwi 指令在保存初始舍入模式的同时设置�
 |===
 
 取整功能：
-
 ----
 roundoff_unsigned(v, d) = (unsigned(v) >> d) + r
 roundoff_signed(v, d) = (signed(v) >> d) + r
 ----
-
 在下面的指令描述中用于表示此操作。
 
 ==== 向量定点饱和标志 `vxsat`
@@ -743,7 +741,7 @@ NOTE: 特别地，`vsetvl` 指令的 `vtype` 参数中所有 XLEN 位都必须�
 |  `rd`  | `rs1`  | AVL 值          | 对 `vl` 的影响
 |  -     | !x0    | `x[rs1]` 中的值 | 正常的 stripmining
 | !x0    |  x0    | ~0               | 将 `vl` 设置为 VLMAX
-|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变) 
+|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变)
 |===
 
 当 `rs1` 不为 `x0` 时，AVL 由 `rs1` 指定的 `x` 寄存器中的无符号整数表示，并且新的 `vl` 值也会写入 `rd` 指定的 `x` 寄存器。
@@ -961,74 +959,104 @@ NOTE: 如果要对强顺序性 IO 区域提供有序的向量访问，则应使�
 
 当 mew 位（inst[28]）被设置时，预计用于编码 128 位及以上的扩展内存大小，但这些编码当前是保留的。
 
-==== 向量单位步长指令
+==== Vector Unit-Stride Instructions
 
 ----
-    # 向量单位步长加载和存储
+    # Vector unit-stride loads and stores
 
-    # vd 目标寄存器，rs1 基地址，vm 为掩码编码（v0.t 或 <缺失>）
-    vle8.v    vd, (rs1), vm  #    8位单位步长加载
-    vle16.v   vd, (rs1), vm  #   16位单位步长加载
-    vle32.v   vd, (rs1), vm  #   32位单位步长加载
-    vle64.v   vd, (rs1), vm  #   64位单位步长加载
+    # vd destination, rs1 base address, vm is mask encoding (v0.t or <missing>)
+    vle8.v    vd, (rs1), vm  #    8-bit unit-stride load
+    vle16.v   vd, (rs1), vm  #   16-bit unit-stride load
+    vle32.v   vd, (rs1), vm  #   32-bit unit-stride load
+    vle64.v   vd, (rs1), vm  #   64-bit unit-stride load
 
-    # vs3 存储数据，rs1 基地址，vm 为掩码编码（v0.t 或 <缺失>）
-    vse8.v    vs3, (rs1), vm  #   8位单位步长存储
-    vse16.v   vs3, (rs1), vm  #  16位单位步长存储
-    vse32.v   vs3, (rs1), vm  #  32位单位步长存储
-    vse64.v   vs3, (rs1), vm  #  64位单位步长存储
+    # vs3 store data, rs1 base address, vm is mask encoding (v0.t or <missing>)
+    vse8.v    vs3, (rs1), vm  #    8-bit unit-stride store
+    vse16.v   vs3, (rs1), vm  #   16-bit unit-stride store
+    vse32.v   vs3, (rs1), vm  #   32-bit unit-stride store
+    vse64.v   vs3, (rs1), vm  #   64-bit unit-stride store
 ----
 
-额外的单位步长掩码加载和存储指令被提供，用于将掩码值传输到内存或从内存传输。这些指令的操作与未掩码字节加载或存储（EEW=8）类似，唯一的区别是有效向量长度为``evl``=ceil(``vl``/8)（即 EMUL=1），并且目标寄存器始终使用与尾部无关的策略进行写入。
+Additional unit-stride mask load and store instructions are
+provided to transfer mask values to/from memory.  These
+operate similarly to unmasked byte loads or stores (EEW=8), except that
+the effective vector length is ``evl``=ceil(``vl``/8) (i.e. EMUL=1),
+and the destination register is always written with a tail-agnostic
+policy.
 
 ----
-    # 向量单位步长掩码加载
-    vlm.v vd, (rs1)    #  加载长度为 ceil(vl/8) 的字节向量
+    # Vector unit-stride mask load
+    vlm.v vd, (rs1)   #  Load byte vector of length ceil(vl/8)
 
-    # 向量单位步长掩码存储
-    vsm.v vs3, (rs1)   #  存储长度为 ceil(vl/8) 的字节向量
+    # Vector unit-stride mask store
+    vsm.v vs3, (rs1)  #  Store byte vector of length ceil(vl/8)
 ----
 
-`vlm.v` 和 `vsm.v` 与 `vle8.v` 和 `vse8.v` 使用相同的 `width[2:0]`=0 编码，但通过不同的 `lumop` 和 `sumop` 
-编码加以区分。由于 `vlm.v` 和 `vsm.v` 作为字节加载和存储指令工作，因此这些指令的 `vstart` 是按字节为单位的。
+`vlm.v` and `vsm.v` are encoded with the same `width[2:0]`=0 encoding as
+`vle8.v` and `vse8.v`, but are distinguished by different
+`lumop` and `sumop` encodings.  Since `vlm.v` and `vsm.v` operate as byte loads and stores,
+`vstart` is in units of bytes for these instructions.
 
-NOTE: `vlm.v` 和 `vsm.v` 会遵循 `vtype` 中的 `vill` 字段，因为它们通过 `vtype` 间接依赖于 `vl` 的约束。
+NOTE: `vlm.v` and `vsm.v` respect the `vill` field in `vtype`, as
+they depend on `vtype` indirectly through its constraints on `vl`.
 
-NOTE: 之前的汇编助记符 `vle1.v` 和 `vse1.v` 由于处理长度的方式与其他元素加载/存储指令不同，容易引起混淆。为了避免软件更新带来的麻烦，这些旧的汇编助记符被保留为别名。
+NOTE: The previous assembler mnemonics `vle1.v` and `vse1.v` were
+confusing as length was handled differently for these instructions
+versus other element load/store instructions.  To avoid software
+churn, these older assembly mnemonics are being retained as aliases.
 
-NOTE: 提供掩码加载和存储的主要动机是支持那些内部重新排列数据以减少跨数据通路布线的机器。然而，这些指令也为在内存中使用打包的位向量作为掩码值提供了便捷的机制，并通过减少对 `vl` 的修改，降低了掩码溢出/填充的成本。
+NOTE: The primary motivation to provide mask load and store is to
+support machines that internally rearrange data to reduce
+cross-datapath wiring.  However, these instructions also provide a convenient
+mechanism to use packed bit vectors in memory as mask values,
+and also reduce the cost of mask spill/fill by reducing need to change
+`vl`.
 
-==== 向量步长指令
+==== Vector Strided Instructions
 
 ----
-    # 向量步长加载和存储
+    # Vector strided loads and stores
 
-    # vd 为目标寄存器，rs1 为基地址，rs2 为字节步长
-    vlse8.v    vd, (rs1), rs2, vm  #    8位步长加载
-    vlse16.v   vd, (rs1), rs2, vm  #   16位步长加载
-    vlse32.v   vd, (rs1), rs2, vm  #   32位步长加载
-    vlse64.v   vd, (rs1), rs2, vm  #   64位步长加载
+    # vd destination, rs1 base address, rs2 byte stride
+    vlse8.v    vd, (rs1), rs2, vm  #    8-bit strided load
+    vlse16.v   vd, (rs1), rs2, vm  #   16-bit strided load
+    vlse32.v   vd, (rs1), rs2, vm  #   32-bit strided load
+    vlse64.v   vd, (rs1), rs2, vm  #   64-bit strided load
 
-    # vs3 为存储数据，rs1 为基地址，rs2 为字节步长
-    vsse8.v    vs3, (rs1), rs2, vm  #    8位步长存储
-    vsse16.v   vs3, (rs1), rs2, vm  #   16位步长存储
-    vsse32.v   vs3, (rs1), rs2, vm  #   32位步长存储
-    vsse64.v   vs3, (rs1), rs2, vm  #   64位步长存储
+    # vs3 store data, rs1 base address, rs2 byte stride
+    vsse8.v    vs3, (rs1), rs2, vm  #    8-bit strided store
+    vsse16.v   vs3, (rs1), rs2, vm  #   16-bit strided store
+    vsse32.v   vs3, (rs1), rs2, vm  #   32-bit strided store
+    vsse64.v   vs3, (rs1), rs2, vm  #   64-bit strided store
 ----
 
-支持负步长和零步长。
+Negative and zero strides are supported.
 
-在步长指令中，元素访问是无序的，元素之间没有顺序关系。
+Element accesses within a strided instruction are unordered with
+respect to each other.
 
-当 rs2=x0 时，允许但不要求实现执行的内存操作次数少于激活元素的数量，并且可能在同一静态指令的不同动态执行中执行不同数量的内存操作。
+When `rs2`=`x0`, then an implementation is allowed, but not required,
+to perform fewer memory operations than the number of active elements,
+and may perform different numbers of memory operations across
+different dynamic executions of the same static instruction.
 
-NOTE: 编译器必须注意，当立即步幅为 `0` 且意图要求执行所有内存访问时，不能使用 `x0` 形式作为 `rs2`。
+NOTE: Compilers must be aware to not use the `x0` form for rs2 when
+the immediate stride is `0` if the intent is to require all memory
+accesses are performed.
 
-且 `x[rs2] = 0` 时，实施必须为每个激活元素执行一次内存访问（但这些访问是无序的）。
+When `rs2!=x0` and the value of `x[rs2]=0`, the implementation must
+perform one memory access for each active element (but these accesses
+will not be ordered).
 
-NOTE: 与其他架构规定一样，实施必须看起来进行了每一次内存访问。微架构可以优化掉那些不会被其他代理观察到的访问，例如，在遵守 RVWMO 的幂等内存区域中。对于非幂等内存区域，由于定义上每次访问都可以被设备观察到，因此无法进行这种优化。
+NOTE: As with other architectural mandates, implementations must
+_appear_ to perform each memory access. Microarchitectures are
+free to optimize away accesses that would not be observed by another
+agent, for example, in idempotent memory regions obeying RVWMO.  For
+non-idempotent memory regions, where by definition each access can be
+observed by a device, the optimization would not be possible.
 
-NOTE: 当需要对同一内存地址进行重复有序的向量访问时，可以使用有序索引操作。
+NOTE: When repeating ordered vector accesses to the same memory
+address are required, then an ordered indexed operation can be used.
 
 ==== 向量索引指令
 
@@ -3467,7 +3495,8 @@ misa中的 misa.v 置位支持 V 扩展。
 
 V 向量扩展支持精确异常。
 
-V 扩展依赖于 Zvl128b 和 Zve64d 扩展。NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
+V 扩展依赖于 Zvl128b 和 Zve64d 扩展。
+NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
 
 V 扩展支持 EEW 取值 8、16、32 和 64。
 
@@ -3501,12 +3530,13 @@ Zvfhmin 扩展依赖于 Zve32f 扩展。
 
 ==== Zvfh：半精度浮点向量扩展
 
-Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。这些指令的 EEW=16 浮点操作数采用 binary16 格式。
+Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。
+当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：
+<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，
+<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。
+这些指令的 EEW=16 浮点操作数采用 binary16 格式。
 
-此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：
-- 浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）
-- 整数到浮点的加宽转换（vfwcvt.f.x[u].v）
-- 这些指令在 SEW=8 时被定义。
+此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）和 整数到浮点的加宽转换（vfwcvt.f.x[u].v）： 这些指令在 SEW=8 时被定义。
 
 Zvfh 扩展依赖于 Zve32f 和 Zfhmin 扩展。
 
@@ -3515,3 +3545,4 @@ NOTE: 要求基本的标量半精度支持使得 Zvfh 的向量-标量指令更�
 === 向量指令列表
 
 include::images/wavedrom/v-inst-table.adoc[]
+

@@ -325,12 +325,10 @@ NOTE: 可以通过单个 csrwi 指令在保存初始舍入模式的同时设置�
 |===
 
 取整功能：
-
 ----
 roundoff_unsigned(v, d) = (unsigned(v) >> d) + r
 roundoff_signed(v, d) = (signed(v) >> d) + r
 ----
-
 在下面的指令描述中用于表示此操作。
 
 ==== 向量定点饱和标志 `vxsat`
@@ -743,7 +741,7 @@ NOTE: 特别地，`vsetvl` 指令的 `vtype` 参数中所有 XLEN 位都必须�
 |  `rd`  | `rs1`  | AVL 值          | 对 `vl` 的影响
 |  -     | !x0    | `x[rs1]` 中的值 | 正常的 stripmining
 | !x0    |  x0    | ~0               | 将 `vl` 设置为 VLMAX
-|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变) 
+|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变)
 |===
 
 当 `rs1` 不为 `x0` 时，AVL 由 `rs1` 指定的 `x` 寄存器中的无符号整数表示，并且新的 `vl` 值也会写入 `rd` 指定的 `x` 寄存器。
@@ -790,11 +788,11 @@ NOTE: 当向量的尺寸较小且已知能够适应向量寄存器时，`vsetivl
 
 SEW 和 LMUL 设置可以动态更改，以在单个循环中为混合宽度的操作提供高吞吐量。
 ----
- # 示例：加载 16 位值，将其扩展并乘法得到 32 位结果，再将 32 位结果右移 3 位，然后存储 32 位值。
- # 入口：
- #  a0 存储要处理的总元素数量
- #  a1 存储源数组的地址
- #  a2 存储目标数组的地址
+# 示例：加载 16 位值，将其扩展并乘法得到 32 位结果，再将 32 位结果右移 3 位，然后存储 32 位值。
+# 入口：
+#  a0 存储要处理的总元素数量
+#  a1 存储源数组的地址
+#  a2 存储目标数组的地址
 
 loop:
     vsetvli a3, a0, e16, m4, ta, ma  # vtype = 16 位整数向量;
@@ -3467,7 +3465,8 @@ misa中的 misa.v 置位支持 V 扩展。
 
 V 向量扩展支持精确异常。
 
-V 扩展依赖于 Zvl128b 和 Zve64d 扩展。NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
+V 扩展依赖于 Zvl128b 和 Zve64d 扩展。
+NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
 
 V 扩展支持 EEW 取值 8、16、32 和 64。
 
@@ -3501,12 +3500,13 @@ Zvfhmin 扩展依赖于 Zve32f 扩展。
 
 ==== Zvfh：半精度浮点向量扩展
 
-Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。这些指令的 EEW=16 浮点操作数采用 binary16 格式。
+Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。
+当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：
+<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，
+<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。
+这些指令的 EEW=16 浮点操作数采用 binary16 格式。
 
-此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：
-- 浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）
-- 整数到浮点的加宽转换（vfwcvt.f.x[u].v）
-- 这些指令在 SEW=8 时被定义。
+此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）和 整数到浮点的加宽转换（vfwcvt.f.x[u].v）： 这些指令在 SEW=8 时被定义。
 
 Zvfh 扩展依赖于 Zve32f 和 Zfhmin 扩展。
 
@@ -3515,3 +3515,4 @@ NOTE: 要求基本的标量半精度支持使得 Zvfh 的向量-标量指令更�
 === 向量指令列表
 
 include::images/wavedrom/v-inst-table.adoc[]
+

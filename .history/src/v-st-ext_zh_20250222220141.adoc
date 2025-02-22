@@ -325,12 +325,10 @@ NOTE: 可以通过单个 csrwi 指令在保存初始舍入模式的同时设置�
 |===
 
 取整功能：
-
 ----
 roundoff_unsigned(v, d) = (unsigned(v) >> d) + r
 roundoff_signed(v, d) = (signed(v) >> d) + r
 ----
-
 在下面的指令描述中用于表示此操作。
 
 ==== 向量定点饱和标志 `vxsat`
@@ -743,7 +741,7 @@ NOTE: 特别地，`vsetvl` 指令的 `vtype` 参数中所有 XLEN 位都必须�
 |  `rd`  | `rs1`  | AVL 值          | 对 `vl` 的影响
 |  -     | !x0    | `x[rs1]` 中的值 | 正常的 stripmining
 | !x0    |  x0    | ~0               | 将 `vl` 设置为 VLMAX
-|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变) 
+|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变)
 |===
 
 当 `rs1` 不为 `x0` 时，AVL 由 `rs1` 指定的 `x` 寄存器中的无符号整数表示，并且新的 `vl` 值也会写入 `rd` 指定的 `x` 寄存器。
@@ -843,100 +841,155 @@ include::images/wavedrom/vmem-format.adoc[]
 
 向量内存的单位步长和常量步长操作会在指令中静态编码数据传输的 EEW（元素有效宽度），以减少在混合宽度程序中访问内存时 `vtype` 变更的次数。索引操作使用指令中的显式 EEW 编码来设置用于索引的元素大小，并使用 SEW/LMUL 来指定数据宽度。
 
-==== 向量加载/存储的寻址模式
+==== Vector Load/Store Addressing Modes
 
-向量扩展支持以下三种寻址模式：单位步长（unit-stride）、步长（strided）、索引。向量加载/存储的基址寄存器和步长源于通用寄存器 `x` 组。
+The vector extension supports unit-stride, strided, and
+indexed (scatter/gather) addressing modes.  Vector load/store base
+registers and strides are taken from the GPR `x` registers.
 
-基址计算所有向量访问的基址有效地址由 `rs1` 指定的 `x` 寄存器内容提供。
+The base effective address for all vector accesses is given by the
+contents of the `x` register named in `rs1`.
 
-向量单位步长操作：访问的元素在内存中是连续存储的，并从基址有效地址开始存取。
+Vector unit-stride operations access elements stored contiguously in
+memory starting from the base effective address.
 
-向量常量步长操作：第一个元素存取基址有效地址，后续元素按照 `rs2` 指定的 `x` 寄存器中的字节偏移量进行地址递增。
+Vector constant-strided operations access the first memory element at the base
+effective address, and then access subsequent elements at address
+increments given by the byte offset contained in the `x` register
+specified by `rs2`.
 
-向量索引操作计算每个元素的有效地址时，采用如下方式：由 `vs2` 指定的向量偏移操作数的每个元素值加上基址有效地址，计算得到每个元素的最终地址。数据向量寄存器组的 EEW=SEW，EMUL=LMUL。偏移向量寄存器组的 EEW 由指令编码决定，EMUL=(EEW/SEW)×LMUL。向量偏移操作数被视为字节地址偏移量的向量。
+Vector indexed operations add the contents of each element of the
+vector offset operand specified by `vs2` to the base effective address
+to give the effective address of each element.  The data vector
+register group has EEW=SEW, EMUL=LMUL, while the offset vector
+register group has EEW encoded in the instruction and
+EMUL=(EEW/SEW)*LMUL.
 
-NOTE: 索引操作也可用于访问结构体数组中的字段。其中 vs2 向量保存指向对象基址的指针，标量 x 寄存器保存每个对象中成员字段的偏移量。支持这种情况是为什么索引操作没有被定义为按数据 EEW 缩放元素索引的原因。
+The vector offset operand is treated as a vector of byte-address
+offsets.
 
-若偏移向量元素宽度小于 XLEN，则零扩展至 XLEN 后再加上基址地址。若偏移向量元素宽度大于 XLEN，则仅取低 XLEN 位用于地址计算。若 EEW（元素有效宽度）不受支持，实现必须引发非法指令异常。
+NOTE: The indexed operations can also be used to access fields within
+a vector of objects, where the `vs2` vector holds pointers to the base
+of the objects and the scalar `x` register holds the offset of the
+member field in each object.  Supporting this case is why the indexed
+operations were not defined to scale the element indices by the data
+EEW.
 
-NOTE: 某些硬件可能会对索引 EEW 施加上限（例如仅支持最大 XLEN，小于 ELEN）。
+If the vector offset elements are narrower than XLEN, they are
+zero-extended to XLEN before adding to the base effective address.  If
+the vector offset elements are wider than XLEN, the least-significant
+XLEN bits are used in the address calculation.  An implementation must
+raise an illegal instruction exception if the EEW is not supported for
+offset elements.
 
-向量寻址模式由2-bit `mop[1:0]` 字段进行编码。
+NOTE: A profile may place an upper limit on the maximum supported index
+EEW (e.g., only up to XLEN) smaller than ELEN.
 
-.加载指令的编码
+The vector addressing modes are encoded using the 2-bit `mop[1:0]`
+field.
+
+.encoding for loads
 [cols="1,1,7,6"]
 |===
-2+| mop [1:0] | 描述 | 操作码
+2+| mop [1:0] | Description | Opcodes
 
-| 0 | 0 | 单位步长       | VLE<EEW>
-| 0 | 1 | 无序索引 | VLUXEI<EEW>
-| 1 | 0 | 步长           | VLSE<EEW>
-| 1 | 1 | 有序索引   | VLOXEI<EEW>
+| 0 | 0 | unit-stride       | VLE<EEW>
+| 0 | 1 | indexed-unordered | VLUXEI<EEW>
+| 1 | 0 | strided           | VLSE<EEW>
+| 1 | 1 | indexed-ordered   | VLOXEI<EEW>
 |===
 
-.存储指令的编码
+.encoding for stores
 [cols="1,1,7,6"]
 |===
-2+| mop [1:0] | 描述 | 操作码
+2+| mop [1:0] | Description | Opcodes
 
-| 0 | 0 | 单位步长       | VSE<EEW>
-| 0 | 1 | 无序索引 | VSUXEI<EEW>
-| 1 | 0 | 步长           | VSSE<EEW>
-| 1 | 1 | 有序索引   | VSOXEI<EEW>
+| 0 | 0 | unit-stride       | VSE<EEW>
+| 0 | 1 | indexed-unordered | VSUXEI<EEW>
+| 1 | 0 | strided           | VSSE<EEW>
+| 1 | 1 | indexed-ordered   | VSOXEI<EEW>
 |===
 
-向量单位步长和常量步长的内存访问不保证各个元素访问的顺序。向量索引加载和存储指令提供两种形式：有序和无序。索引有序指令在内存访问时会保留元素的顺序。
+Vector unit-stride and constant-stride memory accesses do not
+guarantee ordering between individual element accesses.  The vector
+indexed load and store memory operations have two forms, ordered and
+unordered.  The indexed-ordered variants preserve element ordering on
+memory accesses.
 
-对于无序指令（mop[1:0] ≠ 11），元素访问的顺序不受保证。如果访问的是强序的 IO 区域，元素访问可以以任意顺序发起。
+For unordered instructions (`mop[1:0]`!=11) there is no guarantee on
+element access order.  If the accesses are to a strongly ordered IO
+region, the element accesses can be initiated in any order.
 
-NOTE: 如果要对强顺序性 IO 区域提供有序的向量访问，则应使用索引有序指令。
+NOTE: To provide ordered vector accesses to a strongly ordered IO
+region, the ordered indexed instructions should be used.
 
-对于支持精确向量异常的实现：索引无序存储的异常必须是精确的。
+For implementations with precise vector traps, exceptions on
+indexed-unordered stores must also be precise.
 
-单位步长加载和存储指令中，使用5-bit `lumop` 和 `sumop` 字段对额外的单位步长向量寻址模式进行编码。
+Additional unit-stride vector addressing modes are encoded using the
+5-bit `lumop` and `sumop` fields in the unit-stride load and store
+instruction encodings respectively.
 
 .lumop
 [cols="1,1,1,1,1,11"]
 |===
-5+| lumop[4:0] | 描述
+5+| lumop[4:0] | Description
 
-| 0 | 0 | 0 | 0 | 0 | 单位步长加载
-| 0 | 1 | 0 | 0 | 0 | 单位步长, 完整寄存器加载
-| 0 | 1 | 0 | 1 | 1 | 单位步长, 掩码加载, EEW=8
-| 1 | 0 | 0 | 0 | 0 | 单位步长仅故障首次(fault-only-first)
-| x | x | x | x | x | 保留给其它编码
+| 0 | 0 | 0 | 0 | 0 | unit-stride load
+| 0 | 1 | 0 | 0 | 0 | unit-stride, whole register load
+| 0 | 1 | 0 | 1 | 1 | unit-stride, mask load, EEW=8
+| 1 | 0 | 0 | 0 | 0 | unit-stride fault-only-first
+| x | x | x | x | x | other encodings reserved
 |===
 
 .sumop
 [cols="1,1,1,1,1,11"]
 |===
-5+| sumop[4:0] | 描述
+5+| sumop[4:0] | Description
 
-| 0 | 0 | 0 | 0 | 0 | 单位步长存储
-| 0 | 1 | 0 | 0 | 0 | 单位步长, 完整寄存器存储
-| 0 | 1 | 0 | 1 | 1 | 单位步长, 掩码存储, EEW=8
-| x | x | x | x | x | 保留给其它编码
+| 0 | 0 | 0 | 0 | 0 | unit-stride store
+| 0 | 1 | 0 | 0 | 0 | unit-stride, whole register store
+| 0 | 1 | 0 | 1 | 1 | unit-stride, mask store, EEW=8
+| x | x | x | x | x | other encodings reserved
 |===
 
-`nf[2:0]` 字段用于编码每个段中的字段数。对于常规向量加载和存储，`nf`=0，表示每个元素位置在向量寄存器组和内存之间仅移动一个值。更大的 `nf` 值用于访问段内多个连续字段，具体说明见 <<sec-aos>>。
+The `nf[2:0]` field encodes the number of fields in each segment.  For
+regular vector loads and stores, `nf`=0, indicating that a single
+value is moved between a vector register group and memory at each
+element position.  Larger values in the `nf` field are used to access
+multiple contiguous fields within a segment as described below in
+Section <<sec-aos>>.
 
-此外，`nf[2:0]` 字段还用于编码整个向量寄存器加载/存储指令所需传输的完整向量寄存器数量。
+The `nf[2:0]` field also encodes the number of whole vector registers
+to transfer for the whole vector register load/store instructions.
 
 [[sec-vector-loadstore-width-encoding]]
-==== 向量加载/存储宽度编码
+==== Vector Load/Store Width Encoding
 
-向量加载和存储指令的 EEW（元素有效宽度） 直接编码在指令中。计算 EMIL 的公式为 EMUL =(EEW/SEW)*LMUL。 如果 EMUL 超出范围（即 EMUL > 8 或 EMUL < 1/8），该指令编码会被保留。选定的 EMUL 必须具有合法的寄存器组编号，否则指令编码会被保留。
+Vector loads and stores have an EEW encoded directly in the
+instruction.  The corresponding EMUL is calculated as EMUL =
+(EEW/SEW)*LMUL. If the EMUL would be out of range (EMUL>8 or
+EMUL<1/8), the instruction encoding is reserved.  The vector register
+groups must have legal register specifiers for the selected EMUL,
+otherwise the instruction encoding is reserved.
 
-向量单位步长和常量步长使用指令中编码的 EEW/EMUL 来处理数据值，而向量索引加载和存储则使用指令中编码的 EEW/EMUL 来处理索引值，使用 `vtype` 中的 SEW/LMUL 来处理数据值。
+Vector unit-stride and constant-stride use the EEW/EMUL encoded in the
+instruction for the data values, while vector indexed loads and stores
+use the EEW/EMUL encoded in the instruction for the index values and
+the SEW/LMUL encoded in `vtype` for the data values.
 
-向量加载和存储使用的编码宽度是标准标量浮点加载和存储未占用的宽度值。
+Vector loads and stores are encoded using width values that are not
+claimed by the standard scalar floating-point loads and stores.
 
-实现必须提供与所有支持的 SEW 设置对应的 EEW 的向量加载和存储。对于不支持的 EEW 宽度的向量加载/存储编码，必须触发非法指令异常。
+Implementations must provide vector loads and stores with EEWs
+corresponding to all supported SEW settings.  Vector load/store
+encodings for unsupported EEW widths must raise an illegal
+instruction exception.
 
-.向量加载/存储的宽度编码表
+.Width encoding for vector loads and stores.
 [cols="5,1,1,1,1,>3,>3,>3,3"]
 |===
-|                  | mew位 3+| width [2:0] | 内存位 | 数据寄存器位 | 索引位 | 操作码
+|                  | mew 3+| width [2:0] | Mem bits | Data Reg bits | Index bits | Opcodes
 
 | Standard scalar FP   | x |   0 | 0 | 1 |   16| FLEN | -  | FLH/FSH
 | Standard scalar FP   | x |   0 | 1 | 0 |   32| FLEN | -  | FLW/FSW
@@ -953,13 +1006,15 @@ NOTE: 如果要对强顺序性 IO 区域提供有序的向量访问，则应使�
 | Reserved             | 1 |   X | X | X |   - |    - | -  |
 |===
 
-内存位是内存中每个元素的大小。
+Mem bits is the size of each element accessed in memory.
 
-数据寄存器位是寄存器中每个数据元素的大小。
+Data reg bits is the size of each data element accessed in register.
 
-索引位是寄存器中每个索引的大小。
+Index bits is the size of each index accessed in register.
 
-当 mew 位（inst[28]）被设置时，预计用于编码 128 位及以上的扩展内存大小，但这些编码当前是保留的。
+The `mew` bit (`inst[28]`) when set is expected to be used to encode
+expanded memory sizes of 128 bits and above, but these encodings are
+currently reserved.
 
 ==== 向量单位步长指令
 
@@ -3467,7 +3522,8 @@ misa中的 misa.v 置位支持 V 扩展。
 
 V 向量扩展支持精确异常。
 
-V 扩展依赖于 Zvl128b 和 Zve64d 扩展。NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
+V 扩展依赖于 Zvl128b 和 Zve64d 扩展。
+NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
 
 V 扩展支持 EEW 取值 8、16、32 和 64。
 
@@ -3501,12 +3557,13 @@ Zvfhmin 扩展依赖于 Zve32f 扩展。
 
 ==== Zvfh：半精度浮点向量扩展
 
-Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。这些指令的 EEW=16 浮点操作数采用 binary16 格式。
+Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。
+当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：
+<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，
+<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。
+这些指令的 EEW=16 浮点操作数采用 binary16 格式。
 
-此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：
-- 浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）
-- 整数到浮点的加宽转换（vfwcvt.f.x[u].v）
-- 这些指令在 SEW=8 时被定义。
+此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）和 整数到浮点的加宽转换（vfwcvt.f.x[u].v）： 这些指令在 SEW=8 时被定义。
 
 Zvfh 扩展依赖于 Zve32f 和 Zfhmin 扩展。
 
@@ -3515,3 +3572,4 @@ NOTE: 要求基本的标量半精度支持使得 Zvfh 的向量-标量指令更�
 === 向量指令列表
 
 include::images/wavedrom/v-inst-table.adoc[]
+

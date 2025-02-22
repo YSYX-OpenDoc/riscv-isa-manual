@@ -325,12 +325,10 @@ NOTE: 可以通过单个 csrwi 指令在保存初始舍入模式的同时设置�
 |===
 
 取整功能：
-
 ----
 roundoff_unsigned(v, d) = (unsigned(v) >> d) + r
 roundoff_signed(v, d) = (signed(v) >> d) + r
 ----
-
 在下面的指令描述中用于表示此操作。
 
 ==== 向量定点饱和标志 `vxsat`
@@ -732,117 +730,170 @@ NOTE: 早期草案要求在将 `vtype` 设为非法值时触发异常。然而�
 
 NOTE: 特别地，`vsetvl` 指令的 `vtype` 参数中所有 XLEN 位都必须进行检查。实现不能忽略未实现的字段。必须检查所有位，以确保假设 `vtype` 中不受支持的向量特性的代码不会在较旧的实现上错误执行，而是会触发异常。
 
-==== AVL 编码
+==== AVL encoding
 
-新的向量长度设置基于 AVL，对于 `vsetvli` 和 `vsetvl`，AVL 在 `rs1` 和 `rd` 字段中编码，如下所示：
+The new vector
+length setting is based on AVL, which for `vsetvli` and `vsetvl` is encoded in the `rs1` and `rd`
+fields as follows:
 
-.AVL 在 `vsetvli` 和 `vsetvl` 指令中的使用
+.AVL used in `vsetvli` and `vsetvl` instructions
 [cols="2,2,10,10"]
 [%autowidth,float="center",align="center",options="header"]
 |===
-|  `rd`  | `rs1`  | AVL 值          | 对 `vl` 的影响
-|  -     | !x0    | `x[rs1]` 中的值 | 正常的 stripmining
-| !x0    |  x0    | ~0               | 将 `vl` 设置为 VLMAX
-|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变) 
+|  `rd`  | `rs1`  | AVL value         | Effect on `vl`
+|  -     | !x0    | Value in `x[rs1]` | Normal stripmining
+| !x0    |  x0    | ~0                | Set `vl` to VLMAX
+|  x0    |  x0    | Value in `vl` register | Keep existing `vl` (of course, `vtype` may change)
 |===
 
-当 `rs1` 不为 `x0` 时，AVL 由 `rs1` 指定的 `x` 寄存器中的无符号整数表示，并且新的 `vl` 值也会写入 `rd` 指定的 `x` 寄存器。
+When `rs1` is not `x0`, the AVL is an unsigned integer held in the `x`
+register specified by `rs1`, and the new `vl` value is also written to
+the `x` register specified by `rd`.
 
-当 `rs1=x0` 但 `rd≠x0` 时，AVL 取最大无符号整数值 (~0)，计算出的 VLMAX 被写入 `vl`，同时也写入 `rd` 指定的 `x` 寄存器。
+When `rs1=x0` but `rd!=x0`, the maximum unsigned integer value (`~0`)
+is used as the AVL, and the resulting VLMAX is written to `vl` and
+also to the `x` register specified by `rd`.
 
-当 `rs1=x0` 且 `rd=x0` 时，指令的操作就像当前 `vl` 中的向量长度作为 AVL 使用一样，结果值会写入 `vl`，但不会写入目标寄存器。只有在新的 SEW/LMUL 比率不会实际改变 VLMAX 和 `vl` 时，这种形式才可以使用。如果新的 SEW/LMUL 比例会导致 VLMAX 发生变化，则该指令的使用是保留的。此外，如果 `vill` 先前已经被设置为 1，则该指令的使用也是保留的。在这两种情况下，实现可以选择设置 `vill`。
+When `rs1=x0` and `rd=x0`, the instruction operates as if the current
+vector length in `vl` is used as the AVL, and the resulting value is
+written to `vl`, but not to a destination register.  This form can
+only be used when VLMAX and hence `vl` is not actually changed by the
+new SEW/LMUL ratio.  Use of the instruction with a new SEW/LMUL ratio
+that would result in a change of VLMAX is reserved.
+Use of the instruction is also reserved if `vill` was 1 beforehand.
+Implementations may set `vill` in either case.
 
-NOTE: 该指令的最后一种形式允许在不降低 VLMAX 的情况下更改 `vtype` 寄存器，同时保持当前的 vl。这一设计是为了确保 `vl` 总是持有当前 `vtype` 设置的合法值。当前的 `vl` 值可以从 `vl` 控制状态寄存器中读取。如果新的 SEW/LMUL 比率导致 VLMAX 缩小，这条指令可能会减小 `vl` 的值，因此这一情况被保留，因为不清楚这种操作是否普遍有用，且实现可以假设该指令不会更改 `vl`，以优化其微架构。
+NOTE: This last form of the instructions allows the `vtype` register to
+be changed while maintaining the current `vl`, provided VLMAX is not
+reduced.  This design was chosen to ensure `vl` would always hold a
+legal value for current `vtype` setting.  The current `vl` value can
+be read from the `vl` CSR.  The `vl` value could be reduced by this
+instruction if the new SEW/LMUL ratio causes VLMAX to shrink, and so
+this case has been reserved as it is not clear this is a generally
+useful operation, and implementations can otherwise assume `vl` is not
+changed by this instruction to optimize their microarchitecture.
 
-对于 `vsetivli` 指令，AVL 在 `rs1` 字段中编码为一个 5 位零扩展立即数（范围 0--31）。
+For the `vsetivli` instruction, the AVL is encoded as a 5-bit
+zero-extended immediate (0--31) in the `rs1` field.
 
-NOTE: `vsetivli` 的 AVL 编码方式与常规控制状态寄存器立即数值的编码方式相同。
+NOTE: The encoding of AVL for `vsetivli` is the same as for regular
+CSR immediate values.
 
-NOTE: 当向量的尺寸较小且已知能够适应向量寄存器时，`vsetivli` 指令可以生成更紧凑的代码，在这种情况下，不会有分块处理开销。
+NOTE: The `vsetivli` instruction provides more compact code when the
+dimensions of vectors are small and known to fit inside the vector
+registers, in which case there is no stripmining overhead.
 
-==== 设置 `vl` 的约束
+==== Constraints on Setting `vl`
 
-`vset{i}vl{i}` 指令首先根据其 `vtype` 参数设置 VLMAX，然后按照以下约束设置 `vl`：
+The `vset{i}vl{i}` instructions first set VLMAX according to their `vtype`
+argument, then set `vl` obeying the following constraints:
 
-. 如果 `AVL ≤ VLMAX`，则 `vl = AVL`
-. 如果 `AVL < (2 * VLMAX)`，则 `ceil(AVL / 2) ≤ vl ≤ VLMAX`
-. 如果 `AVL ≥ (2 * VLMAX)`，则 `vl = VLMAX`
-. 在相同的输入 AVL 和 VLMAX 值的情况下，实现应保证 `vl` 取值是确定性的
-. 以下特性是上述规则的推论：
-.. `AVL = 0` 则 `vl = 0`   
-.. `AVL > 0` 则 `vl > 0`  
+. `vl = AVL` if `AVL {le} VLMAX`
+. `ceil(AVL / 2) {le} vl {le} VLMAX` if `AVL < (2 * VLMAX)`
+. `vl = VLMAX` if `AVL {ge} (2 * VLMAX)`
+. Deterministic on any given implementation for same input AVL and VLMAX values
+. These specific properties follow from the prior rules:
+.. `vl = 0` if  `AVL = 0`
+.. `vl > 0` if `AVL > 0`
 .. `vl {le} VLMAX`
 .. `vl {le} AVL`
-.. 读取 `vl` 作为 `vset{i}vl{i}` 指令的 AVL 参数时，如果生成的 VLMAX 与 `vl` 被读取时的 VLMAX 相等，
-   则 `vl` 保持不变
+.. a value read from `vl` when used as the AVL argument to `vset{i}vl{i}` results in the same
+value in `vl`, provided the resultant VLMAX equals the value of VLMAX at the time that `vl` was read
 
 [NOTE]
 --
-`vl` 的设定规则被设计得足够严格，以确保在 `AVL ≤ VLMAX` 的情况下，`vl` 的行为在寄存器溢出和上下文切换时保持一致，同时又足够灵活，使得在 `AVL > VLMAX` 的情况下，能够优化向量通道的利用率。
+The `vl` setting rules are designed to be sufficiently strict to
+preserve `vl` behavior across register spills and context swaps for
+`AVL {le} VLMAX`, yet flexible enough to enable implementations to improve
+vector lane utilization for `AVL > VLMAX`.
 
-例如，当 `VLMAX < AVL < 2 * VLMAX` 时，实现可以选择 `vl = ceil(AVL / 2)`，以便在分块处理循环的最后两次迭代中均匀分配工作量。
-约束 2 确保即使在 `AVL < 2 * VLMAX` 的情况下，归约循环的第一轮分块处理迭代也能使用所有迭代中最大的向量长度。这样，软件就不需要显式计算分开处理循环过程中观察到的最大向量长度。
-约束 2 还允许在 `VLMAX < AVL < 2 * VLMAX` 的情况下，将 `vl` 设为 VLMAX。
+For example, this permits an implementation to set `vl = ceil(AVL / 2)`
+for `VLMAX < AVL < 2*VLMAX` in order to evenly distribute work over the
+last two iterations of a stripmine loop.
+Requirement 2 ensures that the first stripmine iteration of reduction
+loops uses the largest vector length of all iterations, even in the case
+of `AVL < 2*VLMAX`.
+This allows software to avoid needing to explicitly calculate a running
+maximum of vector lengths observed during a stripmined loop.
+Requirement 2 also allows an implementation to set vl to VLMAX for `VLMAX < AVL < 2*VLMAX`
 --
 
 [[example-stripmine-sew]]
-==== 分块处理与 SEW 变化示例
+==== Example of stripmining and changes to SEW
 
-SEW 和 LMUL 设置可以动态更改，以在单个循环中为混合宽度的操作提供高吞吐量。
+The SEW and LMUL settings can be changed dynamically to provide high
+throughput on mixed-width operations in a single loop.
 ----
- # 示例：加载 16 位值，将其扩展并乘法得到 32 位结果，再将 32 位结果右移 3 位，然后存储 32 位值。
- # 入口：
- #  a0 存储要处理的总元素数量
- #  a1 存储源数组的地址
- #  a2 存储目标数组的地址
+# Example: Load 16-bit values, widen multiply to 32b, shift 32b result
+# right by 3, store 32b values.
+# On entry:
+#  a0 holds the total number of elements to process
+#  a1 holds the address of the source array
+#  a2 holds the address of the destination array
 
 loop:
-    vsetvli a3, a0, e16, m4, ta, ma  # vtype = 16 位整数向量;
-                                     # 同时更新 a3 为 vl（本次迭代的元素数）
-    vle16.v v4, (a1)        # 获取 16 位向量
-    slli t1, a3, 1          # 将本次迭代的元素数乘以 2 字节/源元素
-    add a1, a1, t1          # 增加指针
-    vwmul.vx v8, v4, x10    # 在 <v8--v15> 中进行 32 位宽度乘法
+    vsetvli a3, a0, e16, m4, ta, ma  # vtype = 16-bit integer vectors;
+                                     # also update a3 with vl (# of elements this iteration)
+    vle16.v v4, (a1)        # Get 16b vector
+    slli t1, a3, 1          # Multiply # elements this iteration by 2 bytes/source element
+    add a1, a1, t1          # Bump pointer
+    vwmul.vx v8, v4, x10    # Widening multiply into 32b in <v8--v15>
 
-    vsetvli x0, x0, e32, m8, ta, ma  # 操作 32 位值
+    vsetvli x0, x0, e32, m8, ta, ma  # Operate on 32b values
     vsrl.vi v8, v8, 3
-    vse32.v v8, (a2)        # 存储 32 位元素向量
-    slli t1, a3, 2          # 将本次迭代的元素数乘以 4 字节/目标元素
-    add a2, a2, t1          # 增加指针
-    sub a0, a0, a3          # 将计数减去 vl
-    bnez a0, loop           # 根据情况决定是否继续迭代
+    vse32.v v8, (a2)        # Store vector of 32b elements
+    slli t1, a3, 2          # Multiply # elements this iteration by 4 bytes/destination element
+    add a2, a2, t1          # Bump pointer
+    sub a0, a0, a3          # Decrement count by vl
+    bnez a0, loop           # Any more?
 ----
 
 [[sec-vector-memory]]
-=== 向量加载与存储
+=== Vector Loads and Stores
 
-向量加载和存储用于在向量寄存器和内存之间传输数据。向量加载和存储可以使用掩码，并且仅对激活元素访问内存或触发异常。带掩码的向量加载不会更新目标向量寄存器组中的未激活元素，除非指定了掩码无关模式。所有向量加载和存储指令都可以接受并生成非零的 `vstart` 值。
+Vector loads and stores move values between vector registers and
+memory.
+Vector loads and stores can be masked, and they only access memory or raise
+exceptions for active elements.
+Masked vector loads do not update inactive elements in the destination vector
+register group, unless masked agnostic is specified (`vtype.vma`=1).
+All vector loads and stores may
+generate and accept a non-zero `vstart` value.
 
-==== 向量加载/存储指令编码
+==== Vector Load/Store Instruction Encoding
 
-向量加载和存储指令编码在标量浮点加载和存储的主操作码范围内。这些指令复用了标量浮点加载/存储指令的 12 位立即数字段的一部分，以提供额外的向量指令编码。其中，第 25 位存储标准向量掩码位。（见 <<sec-vector-mask-encoding>>）。
+Vector loads and stores are encoded within the scalar floating-point
+load and store major opcodes (LOAD-FP/STORE-FP).  The vector load and
+store encodings repurpose a portion of the standard scalar
+floating-point load/store 12-bit immediate field to provide further
+vector instruction encoding, with bit 25 holding the standard vector
+mask bit (see <<sec-vector-mask-encoding>>).
 
 include::images/wavedrom/vmem-format.adoc[]
 
 [cols="4,12"]
 |===
-| 字段      | 描述
+| Field      | Description
 
-| rs1[4:0]   | 指定存储基地址的 x 寄存器
-| rs2[4:0]   | 指定存储步幅的 x 寄存器
-| vs2[4:0]   | 指定存储地址偏移的 v 寄存器
-| vs3[4:0]   | 指定存储数据的 v 寄存器
-| vd[4:0]    | 指定加载目标的 v 寄存器
-| vm         | 指定是否启用向量掩码（0 = 启用掩码，1 = 禁用掩码）
-| width[2:0] | 指定内存元素的大小，并与标量浮点区分
-| mew        | 扩展的内存元素宽度。见 <<sec-vector-loadstore-width-encoding>>
-| mop[1:0]   | 指定内存寻址模式
-| nf[2:0]    | 指定每个段中的字段数，用于段加载/存储
-| lumop[4:0]/sumop[4:0] | 额外字段，编码单元步幅指令的变体
+| rs1[4:0]   | specifies x register holding base address
+| rs2[4:0]   | specifies x register holding stride
+| vs2[4:0]   | specifies v register holding address offsets
+| vs3[4:0]   | specifies v register holding store data
+| vd[4:0]    | specifies v register destination of load
+| vm         | specifies whether vector masking is enabled (0 = mask enabled, 1 = mask disabled)
+| width[2:0] | specifies size of memory elements, and distinguishes from FP scalar
+| mew        | extended memory element width. See <<sec-vector-loadstore-width-encoding>>
+| mop[1:0]   | specifies memory addressing mode
+| nf[2:0]    | specifies the number of fields in each segment, for segment load/stores
+| lumop[4:0]/sumop[4:0] | are additional fields encoding variants of unit-stride instructions
 |===
 
-向量内存的单位步长和常量步长操作会在指令中静态编码数据传输的 EEW（元素有效宽度），以减少在混合宽度程序中访问内存时 `vtype` 变更的次数。索引操作使用指令中的显式 EEW 编码来设置用于索引的元素大小，并使用 SEW/LMUL 来指定数据宽度。
-
+Vector memory unit-stride and constant-stride operations directly
+encode EEW of the data to be transferred statically in the instruction
+to reduce the number of `vtype` changes when accessing memory in a
+mixed-width routine.  Indexed operations use the explicit EEW encoding
+in the instruction to set the size of the indices used, and use
+SEW/LMUL to specify the data width.
 ==== 向量加载/存储的寻址模式
 
 向量扩展支持以下三种寻址模式：单位步长（unit-stride）、步长（strided）、索引。向量加载/存储的基址寄存器和步长源于通用寄存器 `x` 组。
@@ -3467,7 +3518,8 @@ misa中的 misa.v 置位支持 V 扩展。
 
 V 向量扩展支持精确异常。
 
-V 扩展依赖于 Zvl128b 和 Zve64d 扩展。NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
+V 扩展依赖于 Zvl128b 和 Zve64d 扩展。
+NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
 
 V 扩展支持 EEW 取值 8、16、32 和 64。
 
@@ -3501,12 +3553,13 @@ Zvfhmin 扩展依赖于 Zve32f 扩展。
 
 ==== Zvfh：半精度浮点向量扩展
 
-Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。这些指令的 EEW=16 浮点操作数采用 binary16 格式。
+Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。
+当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：
+<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，
+<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。
+这些指令的 EEW=16 浮点操作数采用 binary16 格式。
 
-此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：
-- 浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）
-- 整数到浮点的加宽转换（vfwcvt.f.x[u].v）
-- 这些指令在 SEW=8 时被定义。
+此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）和 整数到浮点的加宽转换（vfwcvt.f.x[u].v）： 这些指令在 SEW=8 时被定义。
 
 Zvfh 扩展依赖于 Zve32f 和 Zfhmin 扩展。
 
@@ -3515,3 +3568,4 @@ NOTE: 要求基本的标量半精度支持使得 Zvfh 的向量-标量指令更�
 === 向量指令列表
 
 include::images/wavedrom/v-inst-table.adoc[]
+

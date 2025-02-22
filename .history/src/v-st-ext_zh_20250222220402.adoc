@@ -325,12 +325,10 @@ NOTE: 可以通过单个 csrwi 指令在保存初始舍入模式的同时设置�
 |===
 
 取整功能：
-
 ----
 roundoff_unsigned(v, d) = (unsigned(v) >> d) + r
 roundoff_signed(v, d) = (signed(v) >> d) + r
 ----
-
 在下面的指令描述中用于表示此操作。
 
 ==== 向量定点饱和标志 `vxsat`
@@ -743,7 +741,7 @@ NOTE: 特别地，`vsetvl` 指令的 `vtype` 参数中所有 XLEN 位都必须�
 |  `rd`  | `rs1`  | AVL 值          | 对 `vl` 的影响
 |  -     | !x0    | `x[rs1]` 中的值 | 正常的 stripmining
 | !x0    |  x0    | ~0               | 将 `vl` 设置为 VLMAX
-|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变) 
+|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变)
 |===
 
 当 `rs1` 不为 `x0` 时，AVL 由 `rs1` 指定的 `x` 寄存器中的无符号整数表示，并且新的 `vl` 值也会写入 `rd` 指定的 `x` 寄存器。
@@ -760,29 +758,39 @@ NOTE: `vsetivli` 的 AVL 编码方式与常规控制状态寄存器立即数值�
 
 NOTE: 当向量的尺寸较小且已知能够适应向量寄存器时，`vsetivli` 指令可以生成更紧凑的代码，在这种情况下，不会有分块处理开销。
 
-==== 设置 `vl` 的约束
+==== Constraints on Setting `vl`
 
-`vset{i}vl{i}` 指令首先根据其 `vtype` 参数设置 VLMAX，然后按照以下约束设置 `vl`：
+The `vset{i}vl{i}` instructions first set VLMAX according to their `vtype`
+argument, then set `vl` obeying the following constraints:
 
-. 如果 `AVL ≤ VLMAX`，则 `vl = AVL`
-. 如果 `AVL < (2 * VLMAX)`，则 `ceil(AVL / 2) ≤ vl ≤ VLMAX`
-. 如果 `AVL ≥ (2 * VLMAX)`，则 `vl = VLMAX`
-. 在相同的输入 AVL 和 VLMAX 值的情况下，实现应保证 `vl` 取值是确定性的
-. 以下特性是上述规则的推论：
-.. `AVL = 0` 则 `vl = 0`   
-.. `AVL > 0` 则 `vl > 0`  
+. `vl = AVL` if `AVL {le} VLMAX`
+. `ceil(AVL / 2) {le} vl {le} VLMAX` if `AVL < (2 * VLMAX)`
+. `vl = VLMAX` if `AVL {ge} (2 * VLMAX)`
+. Deterministic on any given implementation for same input AVL and VLMAX values
+. These specific properties follow from the prior rules:
+.. `vl = 0` if  `AVL = 0`
+.. `vl > 0` if `AVL > 0`
 .. `vl {le} VLMAX`
 .. `vl {le} AVL`
-.. 读取 `vl` 作为 `vset{i}vl{i}` 指令的 AVL 参数时，如果生成的 VLMAX 与 `vl` 被读取时的 VLMAX 相等，
-   则 `vl` 保持不变
+.. a value read from `vl` when used as the AVL argument to `vset{i}vl{i}` results in the same
+value in `vl`, provided the resultant VLMAX equals the value of VLMAX at the time that `vl` was read
 
 [NOTE]
 --
-`vl` 的设定规则被设计得足够严格，以确保在 `AVL ≤ VLMAX` 的情况下，`vl` 的行为在寄存器溢出和上下文切换时保持一致，同时又足够灵活，使得在 `AVL > VLMAX` 的情况下，能够优化向量通道的利用率。
+The `vl` setting rules are designed to be sufficiently strict to
+preserve `vl` behavior across register spills and context swaps for
+`AVL {le} VLMAX`, yet flexible enough to enable implementations to improve
+vector lane utilization for `AVL > VLMAX`.
 
-例如，当 `VLMAX < AVL < 2 * VLMAX` 时，实现可以选择 `vl = ceil(AVL / 2)`，以便在分块处理循环的最后两次迭代中均匀分配工作量。
-约束 2 确保即使在 `AVL < 2 * VLMAX` 的情况下，归约循环的第一轮分块处理迭代也能使用所有迭代中最大的向量长度。这样，软件就不需要显式计算分开处理循环过程中观察到的最大向量长度。
-约束 2 还允许在 `VLMAX < AVL < 2 * VLMAX` 的情况下，将 `vl` 设为 VLMAX。
+For example, this permits an implementation to set `vl = ceil(AVL / 2)`
+for `VLMAX < AVL < 2*VLMAX` in order to evenly distribute work over the
+last two iterations of a stripmine loop.
+Requirement 2 ensures that the first stripmine iteration of reduction
+loops uses the largest vector length of all iterations, even in the case
+of `AVL < 2*VLMAX`.
+This allows software to avoid needing to explicitly calculate a running
+maximum of vector lengths observed during a stripmined loop.
+Requirement 2 also allows an implementation to set vl to VLMAX for `VLMAX < AVL < 2*VLMAX`
 --
 
 [[example-stripmine-sew]]
@@ -3467,7 +3475,8 @@ misa中的 misa.v 置位支持 V 扩展。
 
 V 向量扩展支持精确异常。
 
-V 扩展依赖于 Zvl128b 和 Zve64d 扩展。NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
+V 扩展依赖于 Zvl128b 和 Zve64d 扩展。
+NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
 
 V 扩展支持 EEW 取值 8、16、32 和 64。
 
@@ -3501,12 +3510,13 @@ Zvfhmin 扩展依赖于 Zve32f 扩展。
 
 ==== Zvfh：半精度浮点向量扩展
 
-Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。这些指令的 EEW=16 浮点操作数采用 binary16 格式。
+Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。
+当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：
+<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，
+<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。
+这些指令的 EEW=16 浮点操作数采用 binary16 格式。
 
-此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：
-- 浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）
-- 整数到浮点的加宽转换（vfwcvt.f.x[u].v）
-- 这些指令在 SEW=8 时被定义。
+此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）和 整数到浮点的加宽转换（vfwcvt.f.x[u].v）： 这些指令在 SEW=8 时被定义。
 
 Zvfh 扩展依赖于 Zve32f 和 Zfhmin 扩展。
 
@@ -3515,3 +3525,4 @@ NOTE: 要求基本的标量半精度支持使得 Zvfh 的向量-标量指令更�
 === 向量指令列表
 
 include::images/wavedrom/v-inst-table.adoc[]
+

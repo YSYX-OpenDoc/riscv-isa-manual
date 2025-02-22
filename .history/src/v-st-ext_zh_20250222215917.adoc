@@ -325,12 +325,10 @@ NOTE: 可以通过单个 csrwi 指令在保存初始舍入模式的同时设置�
 |===
 
 取整功能：
-
 ----
 roundoff_unsigned(v, d) = (unsigned(v) >> d) + r
 roundoff_signed(v, d) = (signed(v) >> d) + r
 ----
-
 在下面的指令描述中用于表示此操作。
 
 ==== 向量定点饱和标志 `vxsat`
@@ -743,7 +741,7 @@ NOTE: 特别地，`vsetvl` 指令的 `vtype` 参数中所有 XLEN 位都必须�
 |  `rd`  | `rs1`  | AVL 值          | 对 `vl` 的影响
 |  -     | !x0    | `x[rs1]` 中的值 | 正常的 stripmining
 | !x0    |  x0    | ~0               | 将 `vl` 设置为 VLMAX
-|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变) 
+|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变)
 |===
 
 当 `rs1` 不为 `x0` 时，AVL 由 `rs1` 指定的 `x` 寄存器中的无符号整数表示，并且新的 `vl` 值也会写入 `rd` 指定的 `x` 寄存器。
@@ -1030,63 +1028,86 @@ NOTE: 与其他架构规定一样，实施必须看起来进行了每一次内�
 
 NOTE: 当需要对同一内存地址进行重复有序的向量访问时，可以使用有序索引操作。
 
-==== 向量索引指令
+==== Vector Indexed Instructions
 
 ----
-   # 向量索引加载和存储
+    # Vector indexed loads and stores
 
-    # 向量索引-无序加载指令
-    # vd 目标寄存器，rs1 基地址，vs2 字节偏移
-    vluxei8.v    vd, (rs1), vs2, vm  # 无序 8位索引加载 SEW 数据
-    vluxei16.v   vd, (rs1), vs2, vm  # 无序 16位索引加载 SEW 数据
-    vluxei32.v   vd, (rs1), vs2, vm  # 无序 32位索引加载 SEW 数据
-    vluxei64.v   vd, (rs1), vs2, vm  # 无序 64位索引加载 SEW 数据
+    # Vector indexed-unordered load instructions
+    # vd destination, rs1 base address, vs2 byte offsets
+    vluxei8.v    vd, (rs1), vs2, vm  # unordered  8-bit indexed load of SEW data
+    vluxei16.v   vd, (rs1), vs2, vm  # unordered 16-bit indexed load of SEW data
+    vluxei32.v   vd, (rs1), vs2, vm  # unordered 32-bit indexed load of SEW data
+    vluxei64.v   vd, (rs1), vs2, vm  # unordered 64-bit indexed load of SEW data
 
-    # 向量索引-有序加载指令
-    # vd 目标寄存器，rs1 基地址，vs2 字节偏移
-    vloxei8.v    vd, (rs1), vs2, vm  # 有序 8位索引加载 SEW 数据
-    vloxei16.v   vd, (rs1), vs2, vm  # 有序 16位索引加载 SEW 数据
-    vloxei32.v   vd, (rs1), vs2, vm  # 有序 32位索引加载 SEW 数据
-    vloxei64.v   vd, (rs1), vs2, vm  # 有序 64位索引加载 SEW 数据
+    # Vector indexed-ordered load instructions
+    # vd destination, rs1 base address, vs2 byte offsets
+    vloxei8.v    vd, (rs1), vs2, vm  # ordered  8-bit indexed load of SEW data
+    vloxei16.v   vd, (rs1), vs2, vm  # ordered 16-bit indexed load of SEW data
+    vloxei32.v   vd, (rs1), vs2, vm  # ordered 32-bit indexed load of SEW data
+    vloxei64.v   vd, (rs1), vs2, vm  # ordered 64-bit indexed load of SEW data
 
-    # 向量索引-无序存储指令
-    # vs3 存储数据，rs1 基地址，vs2 字节偏移
-    vsuxei8.v   vs3, (rs1), vs2, vm # 无序 8位索引存储 SEW 数据
-    vsuxei16.v  vs3, (rs1), vs2, vm # 无序 16位索引存储 SEW 数据
-    vsuxei32.v  vs3, (rs1), vs2, vm # 无序 32位索引存储 SEW 数据
-    vsuxei64.v  vs3, (rs1), vs2, vm # 无序 64位索引存储 SEW 数据
+    # Vector indexed-unordered store instructions
+    # vs3 store data, rs1 base address, vs2 byte offsets
+    vsuxei8.v   vs3, (rs1), vs2, vm # unordered  8-bit indexed store of SEW data
+    vsuxei16.v  vs3, (rs1), vs2, vm # unordered 16-bit indexed store of SEW data
+    vsuxei32.v  vs3, (rs1), vs2, vm # unordered 32-bit indexed store of SEW data
+    vsuxei64.v  vs3, (rs1), vs2, vm # unordered 64-bit indexed store of SEW data
 
-    # 向量索引-有序存储指令
-    # vs3 存储数据，rs1 基地址，vs2 字节偏移
-    vsoxei8.v    vs3, (rs1), vs2, vm  # 有序 8位索引存储 SEW 数据
-    vsoxei16.v   vs3, (rs1), vs2, vm  # 有序 16位索引存储 SEW 数据
-    vsoxei32.v   vs3, (rs1), vs2, vm  # 有序 32位索引存储 SEW 数据
-    vsoxei64.v   vs3, (rs1), vs2, vm  # 有序 64位索引存储 SEW 数据
-
-----
-
-NOTE: 索引加载和存储的汇编语法使用 ``ei`` __x__ 而不是 ``e`` __x__ 以表示静态编码的 EEW 是索引的，而不是数据的。
-
-NOTE: 索引操作的助记符使用了 "U" 或 "O" 来区分无序和有序，而其他向量寻址模式没有这个字符。虽然这种做法可能稍显不一致，但这种方式最小化了对现有软件的干扰，因为之前的 VSXEI 表示 "有序" —— 在过渡期间，可以将操作码保留为别名，帮助减少软件的变动。
-
-==== 单位步幅仅首次故障加载（Fault-Only-First Loads）
-
-单位步幅仅首次故障加载指令用于向量化具有数据依赖退出条件的循环（“while”循环）。这些指令作为常规加载执行，唯一的不同是它们只会在元素 0 上遇到同步异常时才会触发陷阱。如果元素 0 引发异常，`vl` 不会修改，并且陷阱会被触发。如果元素 > 0 引发异常，则不会触发相应的陷阱，且向量长度 `vl` 会减少到本应引发异常的元素的索引。
-
-加载指令可能会覆盖在报告陷阱的元素索引之后的活跃目标向量寄存器组元素。类似地，故障只对首个元素生效的加载指令也可能更新超出导致向量长度裁剪的元素的目标元素（但不会超过初始向量长度）。这些虚假更新的值不必与内存中对应地址位置的值一致。非幂等内存位置只能在知道相应的元素加载操作不会因陷阱或向量长度裁剪而重新启动时访问。
+    # Vector indexed-ordered store instructions
+    # vs3 store data, rs1 base address, vs2 byte offsets
+    vsoxei8.v    vs3, (rs1), vs2, vm  # ordered  8-bit indexed store of SEW data
+    vsoxei16.v   vs3, (rs1), vs2, vm  # ordered 16-bit indexed store of SEW data
+    vsoxei32.v   vs3, (rs1), vs2, vm  # ordered 32-bit indexed store of SEW data
+    vsoxei64.v   vs3, (rs1), vs2, vm  # ordered 64-bit indexed store of SEW data
 
 ----
-    # 向量单位步长故障只对首个元素生效的加载指令
 
-    # vd 目标寄存器，rs1 基地址，vm 是掩码编码（v0.t 或 <缺失>）
-    vle8ff.v    vd, (rs1), vm  #    8位单位步长故障只对首个元素生效的加载
-    vle16ff.v   vd, (rs1), vm  #   16位单位步长故障只对首个元素生效的加载
-    vle32ff.v   vd, (rs1), vm  #   32位单位步长故障只对首个元素生效的加载
-    vle64ff.v   vd, (rs1), vm  #   64位单位步长故障只对首个元素生效的加载
+NOTE: The assembler syntax for indexed loads and stores uses
+``ei``__x__ instead of ``e``__x__ to indicate the statically encoded EEW
+is of the index not the data.
+
+NOTE: The indexed operations mnemonics have a "U" or "O" to
+distinguish between unordered and ordered, while the other vector
+addressing modes have no character. While this is perhaps a little
+less consistent, this approach minimizes disruption to existing
+software, as VSXEI previously meant "ordered" - and the opcode can be
+retained as an alias during transition to help reduce software churn.
+
+==== Unit-stride Fault-Only-First Loads
+
+The unit-stride fault-only-first load instructions are used to
+vectorize loops with data-dependent exit conditions ("while" loops).
+These instructions execute as a regular load except that they will
+only take a trap caused by a synchronous exception on element 0.  If
+element 0 raises an exception, `vl` is not modified, and the trap is
+taken.  If an element > 0 raises an exception, the corresponding trap
+is not taken, and the vector length `vl` is reduced to the index of
+the element that would have raised an exception.
+
+Load instructions may overwrite active destination vector register
+group elements past the element index at which the trap is reported.
+Similarly, fault-only-first load instructions may update active destination
+elements past the element that causes trimming of the vector length
+(but not past the original vector length).  The values of these
+spurious updates do not have to correspond to the values in memory at
+the addressed memory locations.  Non-idempotent memory locations can
+only be accessed when it is known the corresponding element load
+operation will not be restarted due to a trap or vector-length
+trimming.
+
+----
+    # Vector unit-stride fault-only-first loads
+
+    # vd destination, rs1 base address, vm is mask encoding (v0.t or <missing>)
+    vle8ff.v    vd, (rs1), vm  #    8-bit unit-stride fault-only-first load
+    vle16ff.v   vd, (rs1), vm  #   16-bit unit-stride fault-only-first load
+    vle32ff.v   vd, (rs1), vm  #   32-bit unit-stride fault-only-first load
+    vle64ff.v   vd, (rs1), vm  #   64-bit unit-stride fault-only-first load
 ----
 
 ----
-使用单位步长故障只对首个元素生效的指令的 strlen 示例
+strlen example using unit-stride fault-only-first instruction
 
 include::example/strlen_zh.s[lines=4..-1]
 ----
@@ -3467,7 +3488,8 @@ misa中的 misa.v 置位支持 V 扩展。
 
 V 向量扩展支持精确异常。
 
-V 扩展依赖于 Zvl128b 和 Zve64d 扩展。NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
+V 扩展依赖于 Zvl128b 和 Zve64d 扩展。
+NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些短向量情况下避免分块代码。但同时增加了最小实现的规模。使用更大的 LMUL 可避免分块，但会减少可用的向量寄存器组：例如，LMUL=8 时，最多可处理 16 个 64 位元素的向量，无需分块，但仅能使用 4 组向量寄存器。
 
 V 扩展支持 EEW 取值 8、16、32 和 64。
 
@@ -3501,12 +3523,13 @@ Zvfhmin 扩展依赖于 Zve32f 扩展。
 
 ==== Zvfh：半精度浮点向量扩展
 
-Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。这些指令的 EEW=16 浮点操作数采用 binary16 格式。
+Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。
+当实现 Zvfh 扩展时，在 SEW=16 时，以下章节中的所有指令将被定义：
+<<sec-vector-float>>，<<sec-vector-float-reduce>>，<<sec-vector-float-reduce-widen>>，<<sec-vector-float-move>>，
+<<sec-vfslide1up>> 和 <<sec-vfslide1down>>。
+这些指令的 EEW=16 浮点操作数采用 binary16 格式。
 
-此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：
-- 浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）
-- 整数到浮点的加宽转换（vfwcvt.f.x[u].v）
-- 这些指令在 SEW=8 时被定义。
+此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）和 整数到浮点的加宽转换（vfwcvt.f.x[u].v）： 这些指令在 SEW=8 时被定义。
 
 Zvfh 扩展依赖于 Zve32f 和 Zfhmin 扩展。
 
@@ -3515,3 +3538,4 @@ NOTE: 要求基本的标量半精度支持使得 Zvfh 的向量-标量指令更�
 === 向量指令列表
 
 include::images/wavedrom/v-inst-table.adoc[]
+
