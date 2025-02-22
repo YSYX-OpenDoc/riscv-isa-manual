@@ -2083,23 +2083,23 @@ vssub.vx vd, vs2, rs1, vm # 向量-标量
 NOTE: 对于 `vasub`，只有在使用 `rnu` 或 `rne` 舍入模式时，从最小数减去最大数才会发生溢出。
 
 ----
-# 平均加法
+ # 平均加法
 
-# 无符号整数的平均加法
+ # 无符号整数的平均加法
 vaaddu.vv vd, vs2, vs1, vm   # roundoff_unsigned(vs2[i] + vs1[i], 1)
 vaaddu.vx vd, vs2, rs1, vm   # roundoff_unsigned(vs2[i] + x[rs1], 1)
 
-# 有符号整数的平均加法
+ # 有符号整数的平均加法
 vaadd.vv vd, vs2, vs1, vm   # roundoff_signed(vs2[i] + vs1[i], 1)
 vaadd.vx vd, vs2, rs1, vm   # roundoff_signed(vs2[i] + x[rs1], 1)
 
-# 平均减法
+ # 平均减法
 
-# 无符号整数的平均减法
+ # 无符号整数的平均减法
 vasubu.vv vd, vs2, vs1, vm   # roundoff_unsigned(vs2[i] - vs1[i], 1)
 vasubu.vx vd, vs2, rs1, vm   # roundoff_unsigned(vs2[i] - x[rs1], 1)
 
-# 有符号整数的平均减法
+ # 有符号整数的平均减法
 vasub.vv vd, vs2, vs1, vm   # roundoff_signed(vs2[i] - vs1[i], 1)
 vasub.vx vd, vs2, rs1, vm   # roundoff_signed(vs2[i] - x[rs1], 1)
 ----
@@ -2140,13 +2140,13 @@ vssra.vi vd, vs2, uimm, vm # vd[i] = roundoff_signed(vs2[i], uimm)
 `vnclip` 指令用于将定点值打包到较窄的目标格式中。该指令支持舍入、缩放和饱和到最终目标格式。源数据位于由 `vs2` 指定的向量寄存器组中。缩放移位量的值可以来自向量寄存器组 `vs1`、标量整数寄存器 `rs1` 或零扩展的 5 位立即数。向量或标量移位量值的低 lg2(2*SEW) 位（例如，SEW=64 位到 SEW=32 位缩小操作时的低 6 位）用于控制右移量，从而提供缩放。
 
 ----
-# 无符号裁剪
-#                                SEW                           2*SEW    SEW
+ # 无符号裁剪
+ #                                SEW                           2*SEW    SEW
  vnclipu.wv vd, vs2, vs1, vm  # vd[i] = clip(roundoff_unsigned(vs2[i], vs1[i]))
  vnclipu.wx vd, vs2, rs1, vm  # vd[i] = clip(roundoff_unsigned(vs2[i], x[rs1]))
  vnclipu.wi vd, vs2, uimm, vm # vd[i] = clip(roundoff_unsigned(vs2[i], uimm))
 
-# 有符号裁剪
+ # 有符号裁剪
  vnclip.wv vd, vs2, vs1, vm  # vd[i] = clip(roundoff_signed(vs2[i], vs1[i]))
  vnclip.wx vd, vs2, rs1, vm  # vd[i] = clip(roundoff_signed(vs2[i], x[rs1]))
  vnclip.wi vd, vs2, uimm, vm # vd[i] = clip(roundoff_signed(vs2[i], uimm))
