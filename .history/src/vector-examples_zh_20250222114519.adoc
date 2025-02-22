@@ -1,0 +1,127 @@
+[appendix]
+== 向量汇编代码示例
+
+以下内容仅作为非规范性说明，旨在帮助读者理解向量 ISA。
+
+=== 向量-向量加法示例
+
+----
+include::example/vvaddint32_zh.s[lines=4..-1]
+----
+
+=== 混合宽度掩码和计算的示例
+
+----
+# 代码可以对掩码操作使用一种数据宽度，而对被掩码的计算使用不同的数据宽度
+#   int8_t a[]; int32_t b[], c[];
+#   for (i=0;  i<n; i++) { b[i] =  (a[i] < 5) ? c[i] : 1; }
+#
+# 保持 SEW/LMUL=8 的混合位宽代码
+  loop:
+    vsetvli a4, a0, e8, m1, ta, ma   # 设置向量长度，使用 8 位元素计算谓词
+    vle8.v v1, (a1)               # 加载 a[i]
+      add a1, a1, a4              # 更新指针
+    vmslt.vi v0, v1, 5            # 计算 a[i] < 5?
+
+    vsetvli x0, a0, e32, m4, ta, mu  # 设置向量长度，使用 32 位元素
+      sub a0, a0, a4              # 递减计数
+    vmv.v.i v4, 1                 # 将立即数 1 复制到目标向量
+    vle32.v v4, (a3), v0.t        # 按掩码加载 C 中的元素，未匹配的保持不变
+      sll t1, a4, 2
+      add a3, a3, t1              # 更新指针
+    vse32.v v4, (a2)              # 存储 b[i]
+      add a2, a2, t1              # 更新指针
+      bnez a0, loop               # 继续处理剩余元素
+
+----
+
+=== Memcpy 示例
+
+----
+include::example/memcpy_zh.s[lines=4..-1]
+----
+
+=== 条件示例
+
+----
+# (int16) z[i] = ((int8) x[i] < 5) ? (int16) a[i] : (int16) b[i];
+#
+
+loop:
+    vsetvli t0, a0, e8, m1, ta, ma # 使用 8 位元素
+    vle8.v v0, (a1)         # 读取 x[i]
+      sub a0, a0, t0        # 递减元素计数
+      add a1, a1, t0        # 更新 x[i] 指针
+    vmslt.vi v0, v0, 5      # 设置掩码 v0
+    vsetvli x0, x0, e16, m2, ta, mu  # 使用 16 位元素
+      slli t0, t0, 1        # 乘以 2 字节（16 位）
+    vle16.v v2, (a2), v0.t  # 读取 a[i]，掩码匹配的情况
+    vmnot.m v0, v0          # 反转掩码
+      add a2, a2, t0        # 更新 a[i] 指针
+    vle16.v v2, (a3), v0.t  # 读取 b[i]，掩码匹配的情况
+      add a3, a3, t0        # 更新 b[i] 指针
+    vse16.v v2, (a4)        # 存储 z[i]
+      add a4, a4, t0        # 更新 z[i] 指针
+      bnez a0, loop
+----
+=== SAXPY (Single-Precision A·X Plus Y) 示例
+
+----
+include::example/saxpy_zh.s[lines=4..-1]
+----
+
+=== SGEMM (Single precision General Matrix Multiplication) 示例
+
+----
+include::example/sgemm_zh.S[lines=4..-1]
+----
+
+=== 近似除法计算示例
+
+----
+# v1 = v1 / v2，精度接近 23 位
+
+vfrec7.v v3, v2             # 估算 1/v2
+  li t0, 0x40000000
+vmv.v.x v4, t0              # 复制 2.0 到向量
+vfnmsac.vv v4, v2, v3       # 计算 2.0 - v2 * 估算(1/v2)
+vfmul.vv v3, v3, v4         # 改进 1/v2 的估算
+vmv.v.x v4, t0              # 复制 2.0 到向量
+vfnmsac.vv v4, v2, v3       # 计算 2.0 - v2 * 估算(1/v2)
+vfmul.vv v3, v3, v4         # 改进 1/v2 的估算
+vfmul.vv v1, v1, v3         # 计算 v1/v2 的估算值
+
+----
+
+=== 近似平方根计算示例
+
+----
+# v1 = sqrt(v1)，精度接近 23 位
+
+  fmv.w.x ft0, x0           # 屏蔽零输入
+vmfne.vf v0, v1, ft0        #   避免除零错误
+vfrsqrt7.v v2, v1, v0.t     # 估算 1/sqrt(x)
+vmfne.vf v0, v2, ft0, v0.t  # 额外屏蔽 +inf 输入
+  li t0, 0x40400000
+vmv.v.x v4, t0              # 复制 3.0 到向量
+vfmul.vv v3, v1, v2, v0.t   # 计算 x * 估算值
+vfnmsub.vv v3, v2, v4, v0.t # 计算 (- x) * 估算值 * 估算值 + 3
+vfmul.vv v3, v3, v2, v0.t   # 计算 估算值 * ( (- x) * 估算值 * 估算值 + 3)
+  li t0, 0x3f000000
+  fmv.w.x ft0, t0           # 0.5
+vfmul.vf v2, v3, ft0, v0.t  # 估算到 14 位精度
+vfmul.vv v3, v1, v2, v0.t   # 计算 x * 估算值
+vfnmsub.vv v3, v2, v4, v0.t # 计算 (- x) * 估算值 * 估算值 + 3
+vfmul.vv v3, v3, v2, v0.t   # 计算 估算值 * (-x * 估算值 * 估算值 + 3)
+vfmul.vf v2, v3, ft0, v0.t  # 估算到 23 位精度
+vfmul.vv v1, v2, v1, v0.t   # 计算 x * 1/sqrt(x)
+
+----
+
+=== C 标准库 strcmp 示例
+
+----
+include::example/strcmp_zh.s[lines=4..-1]
+----
+
+include::fraclmul_zh.adoc[]

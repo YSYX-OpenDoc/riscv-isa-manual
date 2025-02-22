@@ -697,7 +697,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 ====
 将内存存储操作转发给内存加载可能仅满足加载的部分切片，剩下的切片可能仍未满足。
 
-一个程序顺序之前的存储操作，在上述转换时不可用，但当它变得可用时，可能会使 latexmath:[$msoss$] 暂时不可靠（违反一致性）。该存储操作会阻止加载指令完成（见 <<finish, 取指>>），并会在该存储操作传播时导致加载指令重新开始（见 <<prop_store, 传播存储操作>>）。
+一个程序顺序之前的存储操作，在上述转换时不可用，但当它变得可用时，可能会使 latexmath:[$msoss$] 暂时不可靠（违反一致性）。该存储操作会阻止加载指令完成（见 <<finish, Finish instruction>>），并会在该存储操作传播时导致加载指令重新开始（见 <<prop_store, Propagate store operation>>）。
 
 上述转换条件的一个后果是，store-release-RCsc 内存存储操作不能转发给 load-acquire-RCsc 指令：latexmath:[$msoss$] 不包括已完成存储的内存存储操作（因为那些必须是传播的内存存储操作），并且上述条件要求所有程序顺序之前的 store-releases-RCsc 操作在加载为 acquire-RCsc 时必须完成。
 ====
@@ -749,7 +749,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 [[commit_stores]]
 ===== 提交存储指令
 
-在状态 Pending_mem_stores(_store_continuation_) 下，非 `sc` 存储指令或在 <<commit_sc,提交并传播 `sc` 的存储操作>> 转换上下文中的 `sc` 指令实例 latexmath:[$i$]，如果满足以下条件，则可以提交（与传播不同）：
+在状态 Pending_mem_stores(_store_continuation_) 下，非 `sc` 存储指令或在 <<commit_sc，提交并传播 `sc` 的存储操作>> 转换上下文中的 `sc` 指令实例 latexmath:[$i$]，如果满足以下条件，则可以提交（与传播不同）：
 
 . latexmath:[$i$] 具有完全确定的数据；
 . 所有程序顺序之前的条件分支和间接跳转指令都已完成；
@@ -785,7 +785,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 
 . 使用 latexmath:[$mso$] 更新共享内存状态；
 . 更新 latexmath:[$i.\textit{mem\_stores}$]，以表明 latexmath:[$mso$] 已被传播；
-. 重新启动任何由于此操作而违反一致性的推测指令，即，对于每个程序顺序在 latexmath:[$i$] 之后且未完成的指令 latexmath:[$i'$]，以及每个满足自 latexmath:[$msoss'$] 的内存加载操作 latexmath:[$mlo'$]，如果存在一个与  latexmath:[$mso$] 重叠的内存存储操作切片 latexmath:[$msos'$]，且该切片不是来自 latexmath:[$mso$]，并且 latexmath:[$msos'$] 不是来自 latexmath:[$i$] 的程序顺序后继指令，则重新启动 latexmath:[$i'$] 及其 _restart-dependents_（见 <<sat_by_forwarding, 通过从未传播的存储中转发来满足内存加载操作>>）。
+. 重新启动任何由于此操作而违反一致性的推测指令，即，对于每个程序顺序在 latexmath:[$i$] 之后且未完成的指令 latexmath:[$i'$]，以及每个满足自 latexmath:[$msoss'$] 的内存加载操作 latexmath:[$mlo'$]，如果存在一个与  latexmath:[$mso$] 重叠的内存存储操作切片 latexmath:[$msos'$]，且该切片不是来自 latexmath:[$mso$]，并且 latexmath:[$msos'$] 不是来自 latexmath:[$i$] 的程序顺序后继指令，则重新启动 latexmath:[$i'$] 及其 _restart-dependents_（见 <<sat_by_forwarding, Satisfy memory load operation by forwarding from unpropagated stores>>）。
 
 [[commit_sc]]
 ===== 提交并传播 `sc` 存储操作
@@ -840,7 +840,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 此外，AMO 的存储也不能转发到程序顺序的后继加载操作。在执行上述转换之前，AMO 的存储操作没有其值，因此不能进行转发；在执行上述转换之后，存储操作已经被传播，因此也不能进行转发。
 ====
 [[commit_fence]]
-===== 提交 fence 指令
+===== 提交 fence
 
 处于 Plain(Fence(kind, next_state)) 状态的 fence 指令实例 latexmath:[$i$] 可以被提交，前提是：
 
@@ -890,7 +890,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 .. 保证 latexmath:[$i$] 的内存加载操作所读取的值不会引发一致性冲突，即，对于任何程序顺序中前置的指令实例 latexmath:[$i'$]，令 latexmath:[$\textit{cfp}$] 为从指令 latexmath:[$i$] 和 latexmath:[$i'$] 之间的存储指令传播的内存存储操作的组合足迹，以及从指令 latexmath:[$i$] 和 latexmath:[$i'$] 之间的存储指令转发到 latexmath:[$i$] 的 固定内存存储操作，包括 latexmath:[$i'$]，并令 latexmath:[$\overline{\textit{cfp}}$] 为 latexmath:[$\textit{cfp}$] 在 latexmath:[$i$] 的内存足迹中的补集。如果 latexmath:[$\overline{\textit{cfp}}$] 非空：
 ... latexmath:[$i'$] 具有完全确定的内存足迹；
 ... latexmath:[$i'$] 没有与 latexmath:[$\overline{\textit{cfp}}$] 重叠的未传播内存存储操作；
-... 如果 latexmath:[$i'$] 是一个加载指令，并且其内存足迹与 latexmath:[$\overline{\textit{cfp}}$] 重叠，则所有与 latexmath:[$\overline{\textit{cfp}}$] 重叠的内存加载操作都已满足，并且 latexmath:[$i'$] 是不可重启的（参见 <<prop_store, 传播存储操作>> 转换以确定指令是否不可重启）。
+... 如果 latexmath:[$i'$] 是一个加载指令，并且其内存足迹与 latexmath:[$\overline{\textit{cfp}}$] 重叠，则所有与 latexmath:[$\overline{\textit{cfp}}$] 重叠的内存加载操作都已满足，并且 latexmath:[$i'$] 是不可重启的（参见 <<prop_store, Propagate store operation>> 转换以确定指令是否不可重启）。
 +
 这里，如果存储指令具有完全确定的数据，则称内存存储操作为固定。
 . latexmath:[$i$] 具有完全确定的数据；并且

@@ -890,7 +890,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 .. 保证 latexmath:[$i$] 的内存加载操作所读取的值不会引发一致性冲突，即，对于任何程序顺序中前置的指令实例 latexmath:[$i'$]，令 latexmath:[$\textit{cfp}$] 为从指令 latexmath:[$i$] 和 latexmath:[$i'$] 之间的存储指令传播的内存存储操作的组合足迹，以及从指令 latexmath:[$i$] 和 latexmath:[$i'$] 之间的存储指令转发到 latexmath:[$i$] 的 固定内存存储操作，包括 latexmath:[$i'$]，并令 latexmath:[$\overline{\textit{cfp}}$] 为 latexmath:[$\textit{cfp}$] 在 latexmath:[$i$] 的内存足迹中的补集。如果 latexmath:[$\overline{\textit{cfp}}$] 非空：
 ... latexmath:[$i'$] 具有完全确定的内存足迹；
 ... latexmath:[$i'$] 没有与 latexmath:[$\overline{\textit{cfp}}$] 重叠的未传播内存存储操作；
-... 如果 latexmath:[$i'$] 是一个加载指令，并且其内存足迹与 latexmath:[$\overline{\textit{cfp}}$] 重叠，则所有与 latexmath:[$\overline{\textit{cfp}}$] 重叠的内存加载操作都已满足，并且 latexmath:[$i'$] 是不可重启的（参见 <<prop_store, 传播存储操作>> 转换以确定指令是否不可重启）。
+... 如果 latexmath:[$i'$] 是一个加载指令，并且其内存足迹与 latexmath:[$\overline{\textit{cfp}}$] 重叠，则所有与 latexmath:[$\overline{\textit{cfp}}$] 重叠的内存加载操作都已满足，并且 latexmath:[$i'$] 是不可重启的（参见 <<prop_store, Propagate store operation>> 转换以确定指令是否不可重启）。
 +
 这里，如果存储指令具有完全确定的数据，则称内存存储操作为固定。
 . latexmath:[$i$] 具有完全确定的数据；并且
