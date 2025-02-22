@@ -35,6 +35,7 @@ ASCIIDOCTOR_OPTS := -a compress \
                     --require=asciidoctor-diagram \
                     --require=asciidoctor-mathematical \
                     -a scripts=cjk \
+		    --safe-mode=unsafe \
                     --trace
 
 # Source directory
