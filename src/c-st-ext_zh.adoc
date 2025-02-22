@@ -444,7 +444,7 @@ include::images/wavedrom/c-breakpoint-instr.adoc[]
 ====
 
 [[rvc-hints]]
-=== HINT 指令
+=== 提示性 HINT 指令
 
 RVC 编码空间的一部分保留用于微架构 HINTs。与 RV32I 基本 ISA 中的 HINTs 类似（见 <<rv32i-hints>>），这些指令不会修改任何架构状态，除了推进 `pc` 和增加任何适用的性能计数器。对于忽略它们的实现，HINTs 作为无操作执行。
 
