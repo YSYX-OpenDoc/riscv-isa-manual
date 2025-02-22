@@ -37,7 +37,7 @@ NOTE: 通常情况下，具有激活向量状态的线程上下文在执行过�
 
 向量扩展向基础的标量 RISC-V ISA 添加了 32 个向量寄存器，以及七个非特权控制和状态寄存器（CSRs）：vstart、vxsat、vxrm、vcsr、vtype、vl 和 vlenb。
 
-.New vector CSRs
+.新的向量 CSRs
 [cols="2,2,2,10"]
 [%autowidth,float="center",align="center",options="header"]
 |===
@@ -56,7 +56,7 @@ NOTE: 四个控制和状态寄存器（CSR）编号 0x00B-0x00E 暂时保留给�
 
 ==== 向量寄存器
 
-向量扩展向基础的标量 RISC-V ISA 添加了 32 个架构向量寄存器，`v0`-`v31`。
+向量扩展向基础的标量 RISC-V ISA 添加了 32 个架构向量寄存器（`v0`-`v31`）。
 
 每个向量寄存器具有固定的 VLEN 位状态。
 
@@ -66,7 +66,7 @@ NOTE: 四个控制和状态寄存器（CSR）编号 0x00B-0x00E 暂时保留给�
 
 当 `mstatus.VS` 设置为 Off 时，尝试执行任何向量指令或访问向量控制状态寄存器时会引发非法指令异常。
 
-当 `mstatus.VS` 设置为初始（initial）或清洁（clean）时，执行任何改变向量状态的指令（包括向量控制状态寄存器）将使 `mstatus.VS` 更改为脏（Dirty）。实现也可以在任何时候将 `mstatus.VS` 从初始或清洁更改为脏，即使向量状态没有发生变化。
+当 `mstatus.VS` 设置为初始（initial）或清洁（clean）时，执行任何改变向量状态的指令（包括向量控制状态寄存器）将使 `mstatus.VS` 更改为脏（dirty）。实现也可以在任何时候将 `mstatus.VS` 从初始或清洁更改为脏，即使向量状态没有发生变化。
 
 NOTE: 准确设置 `mstatus.VS` 是一种优化。软件通常会利用 VS 来减少上下文交换的开销。
 
@@ -106,7 +106,7 @@ NOTE: 未来的标准和自定义向量扩展可能会扩展这些字段，以�
 
 NOTE: `vtype` 的主要功能是使向量指令集能够适配 32 位的指令编码空间。在执行向量指令之前，可以使用单独的 `vset{i}vl{i}` 指令来设置 `vl` 和/或 `vtype` 字段，且实现可以选择将这两条指令融合成一个内部的向量微操作。在许多情况下，`vl` 和 `vtype` 的值可以在多个指令之间复用，从而减少来自 `vset{i}vl{i}` 指令的静态和动态指令开销。预计未来扩展的 64 位指令编码将允许在指令编码中静态指定这些字段。
 
-===== Vector selected element width `vsew[2:0]`
+===== 向量选择的元素宽度 `vsew[2:0]`
 
 vsew 中的值设置了动态选定的元素宽度（SEW）。默认情况下，向量寄存器被视为被划分为 VLEN/SEW 个元素。
 
@@ -193,7 +193,7 @@ LMUL 由 `vtype` 中的带符号 `vlmul` 字段设置（即 LMUL = 2^vlmul[2:0]^
 [[sec-agnostic]]
 ===== `vta`: 向量尾部无关（Vector Tail Agnostic）和 `vma`: 向量掩码无关（Vector Mask Agnostic）
 
-这两个位分别修改了目标尾部元素和目标未激活的被屏蔽元素在执行向量指令时的行为。尾部和未激活集包含在向量操作期间不会接收新结果的元素位置，具体定义见 Section <<sec-inactive-defs>>.
+这两个位分别修改了目标尾部元素和目标未激活的被屏蔽元素在执行向量指令时的行为。尾部和未激活集包含在向量操作期间不会接收新结果的元素位置，具体定义见 <<sec-inactive-defs>>.
 
 所有系统必须支持这四种选项：
 
@@ -208,7 +208,7 @@ LMUL 由 `vtype` 中的带符号 `vlmul` 字段设置（即 LMUL = 2^vlmul[2:0]^
 |   1   |   1   | 无关          | 无关
 |===
 
-掩码目标尾元素总是被视为与尾部无关的，无论`vta`的设置如何。
+掩码目标尾元素总是被视为与尾部无关的，无论 `vta` 的设置如何。
 
 当一个集合被标记为未干扰时，相应的向量寄存器组中的目标元素保持其先前持有的值。
 
@@ -259,7 +259,7 @@ NOTE: `vset{i}vl{i}` 以及整个寄存器的加载和存储操作不依赖于 `
 
 `vl` 是一个 XLEN 位宽的只读控制状态寄存器，只能通过 `vset{i}vl{i}` 指令以及仅故障首次(fault-only-first)向量加载指令变体进行更新。
 
-`vl` 寄存器保存一个无符号整数，指定要通过向量指令更新的元素数量，详细内容请参见 Section <<sec-inactive-defs>> 部分。
+`vl` 寄存器保存一个无符号整数，指定要通过向量指令更新的元素数量，详细内容请参见 <<sec-inactive-defs>> 部分。
 
 NOTE: `vl` 中实现的位数取决于实现支持的最小类型的最大向量长度。例如，最小的支持 SEW=8 且 VLEN=32 的向量实现，需要至少六个位来存储值 0-32（VLEN=32，LMUL=8 和 SEW=8 时，VLMAX=32）。
 
@@ -273,7 +273,7 @@ NOTE: 如果没有这个控制状态寄存器，则需要使用多个指令来�
 
 ==== 向量起始索引控制状态寄存器 `vstart`
 
-该 XLEN 位宽的可读写 `vstart` 寄存器指定了向量指令执行的第一个元素的索引，具体描述见 Section <<sec-inactive-defs>> 部分。
+该 XLEN 位宽的可读写 `vstart` 寄存器指定了向量指令执行的第一个元素的索引，具体描述见 <<sec-inactive-defs>> 部分。
 
 通常，`vstart` 只有在向量指令发生陷阱时由硬件写入，`vstart` 的值表示触发陷阱的元素（无论是同步异常还是异步中断），并在可恢复陷阱处理后，执行将从该元素继续。
 
@@ -312,7 +312,7 @@ NOTE: 可以通过单个 csrwi 指令在保存初始舍入模式的同时设置�
 定点舍入算法如下所示。假设舍入前的结果为 v，并且要舍去 d 位结果。
 则舍入后的结果为 (v >> d) + r，其中 r 取决于舍入模式，具体由下表指定。
 
-.vxrm encoding
+.vxrm 编码
 //[cols="1,1,4,10,5"]
 [%autowidth,float="center",align="center",cols="<,<,<,<,<",options="header"]
 |===
@@ -324,7 +324,7 @@ NOTE: 可以通过单个 csrwi 指令在保存初始舍入模式的同时设置�
 | 1 | 1 | rod | 取整到奇数 (OR bits into LSB, aka "jam")   | `!v[d] & v[d-1:0]{ne}0`
 |===
 
- 取整功能:
+取整功能：
 ----
 roundoff_unsigned(v, d) = (unsigned(v) >> d) + r
 roundoff_signed(v, d) = (signed(v) >> d) + r
@@ -342,7 +342,7 @@ roundoff_signed(v, d) = (signed(v) >> d) + r
 
 `vxrm` 和 `vxsat` 这两个独立的控制状态寄存器也可以通过 XLEN 位宽的向量控制状态寄存器 `vcsr` 中的字段进行访问。
 
-.vcsr layout
+.vcsr 布局
 [cols=">2,4,10"]
 [%autowidth,float="center",align="center",options="header"]
 |===
@@ -601,7 +601,7 @@ NOTE: 重叠约束旨在支持没有寄存器重命名的架构中的可恢复�
 
 ==== 向量掩码
 
-许多向量指令支持掩码。被掩码屏蔽的元素操作不会产生异常。对于目标向量寄存器中的被屏蔽元素，根据 `vtype` 中 `vma` 位的设置 (Section <<sec-agnostic>>).这些元素的处理方式可以是掩码未干扰或掩码无关。
+许多向量指令支持掩码。被掩码屏蔽的元素操作不会产生异常。对于目标向量寄存器中的被屏蔽元素，根据 `vtype` 中 `vma` 位的设置 ( <<sec-agnostic>>).这些元素的处理方式可以是掩码未干扰或掩码无关。
 
 用于控制掩码向量指令执行的掩码值始终由向量寄存器 `v0` 提供。
 
@@ -705,7 +705,7 @@ include::images/wavedrom/vtype-format.adoc[]
  mf8  # LMUL=1/8
  mf4  # LMUL=1/4
  mf2  # LMUL=1/2
- m1   # LMUL=1, assumed if m setting absent
+ m1   # LMUL=1, 如果缺少 m 设置，则假定为
  m2   # LMUL=2
  m4   # LMUL=4
  m8   # LMUL=8
@@ -738,10 +738,10 @@ NOTE: 特别地，`vsetvl` 指令的 `vtype` 参数中所有 XLEN 位都必须�
 [cols="2,2,10,10"]
 [%autowidth,float="center",align="center",options="header"]
 |===
-|  `rd`  | `rs1`  | AVL value         | Effect on `vl`
-|  -     | !x0    | Value in `x[rs1]` | Normal stripmining
-| !x0    |  x0    | ~0                | Set `vl` to VLMAX
-|  x0    |  x0    | Value in `vl` register | Keep existing `vl` (of course, `vtype` may change)
+|  `rd`  | `rs1`  | AVL 值          | 对 `vl` 的影响
+|  -     | !x0    | `x[rs1]` 中的值 | 正常的 stripmining
+| !x0    |  x0    | ~0               | 将 `vl` 设置为 VLMAX
+|  x0    |  x0    | `vl` 寄存器中的值 | 保持现有的 `vl` (当然， `vtype` 可能会改变)
 |===
 
 当 `rs1` 不为 `x0` 时，AVL 由 `rs1` 指定的 `x` 寄存器中的无符号整数表示，并且新的 `vl` 值也会写入 `rd` 指定的 `x` 寄存器。
@@ -861,7 +861,7 @@ NOTE: 某些硬件可能会对索引 EEW 施加上限（例如仅支持最大 XL
 
 向量寻址模式由2-bit `mop[1:0]` 字段进行编码。
 
-.encoding for loads
+.加载指令的编码
 [cols="1,1,7,6"]
 |===
 2+| mop [1:0] | 描述 | 操作码
@@ -872,7 +872,7 @@ NOTE: 某些硬件可能会对索引 EEW 施加上限（例如仅支持最大 XL
 | 1 | 1 | 有序索引   | VLOXEI<EEW>
 |===
 
-.encoding for stores
+.存储指令的编码
 [cols="1,1,7,6"]
 |===
 2+| mop [1:0] | 描述 | 操作码
@@ -925,7 +925,7 @@ NOTE: 如果要对强顺序性 IO 区域提供有序的向量访问，则应使�
 
 向量加载和存储指令的 EEW（元素有效宽度） 直接编码在指令中。计算 EMIL 的公式为 EMUL =(EEW/SEW)*LMUL。 如果 EMUL 超出范围（即 EMUL > 8 或 EMUL < 1/8），该指令编码会被保留。选定的 EMUL 必须具有合法的寄存器组编号，否则指令编码会被保留。
 
-向量单位步长和常量步长使用指令中编码的 EEW/EMUL 来处理数据值，而向量索引加载和存储则使用指令中编码的 EEW/EMUL 来处理索引值，使用`vtype`中的SEW/LMUL来处理数据值。
+向量单位步长和常量步长使用指令中编码的 EEW/EMUL 来处理数据值，而向量索引加载和存储则使用指令中编码的 EEW/EMUL 来处理索引值，使用 `vtype` 中的 SEW/LMUL 来处理数据值。
 
 向量加载和存储使用的编码宽度是标准标量浮点加载和存储未占用的宽度值。
 
@@ -1028,7 +1028,7 @@ NOTE: 与其他架构规定一样，实施必须看起来进行了每一次内�
 
 NOTE: 当需要对同一内存地址进行重复有序的向量访问时，可以使用有序索引操作。
 
-==== Vector Indexed Instructions
+==== 向量索引指令
 
 ----
    # 向量索引加载和存储
@@ -1159,7 +1159,7 @@ NOTE: 当分段包含具有异质大小字段的结构时，软件可以在分�
     vsseg3e32.v vs3, (rs1), vm  # 从内存中将3*4字节的打包向量（vs3, vs3+1, vs3+2）存储到内存
 ----
 
-对于加载操作，`vd`寄存器将保存从分段中加载的第一个字段。对于存储操作，`vs3`寄存器被读取，用于提供每个分段要存储的第一个字段。
+对于加载操作，`vd` 寄存器将保存从分段中加载的第一个字段。对于存储操作，`vs3` 寄存器被读取，用于提供每个分段要存储的第一个字段。
 
 ----
     # 示例 1
@@ -1495,7 +1495,7 @@ NOTE: 最初操作码上使用了 `w` 后缀，但由于它可能与在双字整
 
 NOTE: 浮点扩宽操作已更改为 `vfw*`，而不是原来的 `vwf*`，以便与将来可能写成 `fw*` 的标量扩宽浮点操作保持一致。
 
-扩宽指令的编码必须遵循 Section <<sec-vec-operands>> 的约束。
+扩宽指令的编码必须遵循 <<sec-vec-operands>> 的约束。
 
 [[sec-narrowing]]
 ==== 缩窄向量算术指令
@@ -1519,7 +1519,7 @@ vnop.wv  vd, vs2, vs1, vm  # 整数向量-向量      vd[i] = vs2[i] op vs1[i]
 vnop.wx  vd, vs2, rs1, vm  # 整数向量-标量      vd[i] = vs2[i] op x[rs1]
 ----
 
-缩窄指令的编码必须遵循 Section <<sec-vec-operands>> 的约束。
+缩窄指令的编码必须遵循 <<sec-vec-operands>> 的约束。
 
 
 [[sec-vector-integer]]
@@ -1601,7 +1601,7 @@ NOTE: 标准的向量加载指令访问的内存值与目标寄存器元素的�
 
 为了支持多字整数算术，提供了处理进位的指令。对于每个操作（加法或减法），提供了两条指令：一条提供结果（SEW 宽度），另一条生成进位输出（单个位，编码为掩码布尔值）。
 
-进位输入和输出通过掩码寄存器布局表示，如 Section <<sec-mask-register-layout>> 所述。由于编码约束，进位输入必须来自隐式的 `v0` 寄存器，但进位输出可以写入任何遵守源/目标重叠限制的向量寄存器。
+进位输入和输出通过掩码寄存器布局表示，如 <<sec-mask-register-layout>> 所述。由于编码约束，进位输入必须来自隐式的 `v0` 寄存器，但进位输出可以写入任何遵守源/目标重叠限制的向量寄存器。
 
 `vadc` 和 `vsbc` 分别将源操作数和进位输入或借位输入相加或相减，并将结果写入向量寄存器 `vd`。这些指令被编码为掩码指令（`vm=0`），但它们作用于并写回所有主体元素。对应未掩码版本的编码（`vm=1`）被保留。
 
@@ -1741,7 +1741,7 @@ NOTE: 可以使用带标量操作数 x0 的缩小整数移位指令将整数值�
 
 ==== 向量整数比较指令
 
-以下整数比较指令会在比较为真时将 1 写入目标掩码寄存器元素，否则写入 0。目标掩码向量总是保存在单个向量寄存器中，元素布局如 Section <<sec-mask-register-layout>> 所述。目标掩码向量寄存器可以与源向量掩码寄存器（`v0`）相同。
+以下整数比较指令会在比较为真时将 1 写入目标掩码寄存器元素，否则写入 0。目标掩码向量总是保存在单个向量寄存器中，元素布局如 <<sec-mask-register-layout>> 所述。目标掩码向量寄存器可以与源向量掩码寄存器（`v0`）相同。
 
 ----
  # 相等时置 1
@@ -1806,9 +1806,9 @@ va <= i         vmsle{u}.vi vd, va, i, vm
 va > i          vmsgt{u}.vi vd, va, i, vm
 va >= i         vmsgt{u}.vi vd, va, i-1, vm    vmsge{u}.vi vd, va, i, vm
 
-va, vb vector register groups
-x      scalar integer register
-i      immediate
+va, vb 向量寄存器组
+x      标量整数寄存器
+i      立即数
 ----
 
 NOTE: vmslt{u}.vi 的立即数形式未提供，因为立即数可以减去 1，改用 `vmsle{u}.vi` 变体。`vmsle.vi` 的范围是 -16 到 15，因此有效的`vmslt.vi` 范围是 -15 到 16。`vmsleu.vi` 的范围是 0 到 15，给出了有效的 `vmsltu.vi` 范围是 1 到 16（注意，`vmsltu.vi` 的立即数为 0 时没有用处，因为它总是为假）。
@@ -2176,7 +2176,7 @@ NOTE: 特别是，未来支持 16 位半精度浮点值的向量扩展，也将�
 
 向量浮点指令在 NaN 处理方面与标量浮点指令具有相同的行为。
 
-浮点向量-标量操作的标量值来源于Section <<sec-arithmetic-encoding>>所述的方式。
+浮点向量-标量操作的标量值来源于 <<sec-arithmetic-encoding>>所述的方式。
 
 ==== 向量浮点异常标志
 
@@ -2312,7 +2312,7 @@ vfwnmsac.vf vd, rs1, vs2, vm # vd[i] = -(f[rs1] * vs2[i]) + vd[i]
     vfrsqrt7.v vd, vs2, vm
 ----
 
-这是一个一元向量-向量指令，返回精确到 7 位的 1/√x 估算值。
+这是一个一元向量-向量指令，返回精确到 7 位的 1/sqrt(x) 估算值。
 
 NOTE: 早期的草案版本使用了汇编器名称 vfrsqrte7，但由于该名称与元素宽度的 ``e``__x__ 表示法容易混淆，因此进行了修改。早期的名称可以作为工具链中的别名，保持向后兼容。
 
@@ -2388,7 +2388,7 @@ NOTE: 早期的草案版本使用了汇编器名称 vfrece7，但由于该名称
 | sNaN                                                | _any_         | canonical NaN             | NV
 |===
 
-NOTE: 具有大小至少为 2^-(B+1) 的次正常输入会产生正常输出；其他次正常输入会产生无穷大输出。具有大小至少为 2^(B-1) 的正常输入会产生次正常输出；其他正常输入会产生正常输出。
+NOTE: 具有大小至少为 2^-(B+1)^ 的次正常输入会产生正常输出；其他次正常输入会产生无穷大输出。具有大小至少为 2^B-1^ 的正常输入会产生次正常输出；其他正常输入会产生正常输出。
 
 NOTE: 输出值取决于在溢出异常被触发时的动态舍入模式。
 
@@ -2441,7 +2441,7 @@ NOTE: 可以使用符号注入指令计算浮点元素向量的绝对值，将�
 
 ==== 向量浮点比较指令
 
-这些向量浮点比较指令比较两个源操作数，并将比较结果写入掩码寄存器。目标掩码向量始终保存在单个向量寄存器中，元素布局如 Section <<sec-mask-register-layout>> 所述。目标掩码向量寄存器可以与源向量掩码寄存器（v0）相同。比较指令会写入掩码寄存器，因此始终在与尾部无关的策略下操作。
+这些向量浮点比较指令比较两个源操作数，并将比较结果写入掩码寄存器。目标掩码向量始终保存在单个向量寄存器中，元素布局如 <<sec-mask-register-layout>> 所述。目标掩码向量寄存器可以与源向量掩码寄存器（v0）相同。比较指令会写入掩码寄存器，因此始终在与尾部无关的策略下操作。
 
 比较指令遵循标量浮点比较指令的语义。`vmfeq` 和 `vmfne` 仅在输入为信号 NaN 时触发无效操作异常。`vmflt`、`vmfle`、`vmfgt` 和 `vmfge` 在输入为信号 NaN 或静默 NaN 时都触发无效操作异常。`vmfne` 在任一操作数为 NaN 时将 1 写入目标元素，而其他比较指令在任一操作数为 NaN 时将 0 写入目标元素。
 
@@ -2482,8 +2482,8 @@ NOTE: 可以使用符号注入指令计算浮点元素向量的绝对值，将�
     va > f          vmfgt.vf vd, va, f, vm
     va >= f         vmfge.vf vd, va, f, vm
     
-    va, vb vector register groups
-    f      scalar floating-point register
+    va, vb 向量寄存器组
+    f      标量浮点寄存器
 ----
 
 NOTE: 提供所有形式的比较指令对于正确处理 NaN 的无序比较是必要的。
@@ -2805,7 +2805,7 @@ NOTE: 向量掩码逻辑指令旨在与后续的掩码向量操作轻松融合�
 
 NOTE: 该指令之前的汇编助记符是 `vpopc.m`，但为了与标量指令保持一致，已将其重命名。为了软件兼容性，汇编指令别名 `vpopc.m` 仍然保留。
 
-源操作数是一个向量寄存器，存储了掩码寄存器的值，具体内容参见 Section <<sec-mask-register-layout>>。
+源操作数是一个向量寄存器，存储了掩码寄存器的值，具体内容参见 <<sec-mask-register-layout>>。
 
 `vcpop.m` 指令计算向量源掩码寄存器的激活元素中值为 1 的掩码元素的数量，并将结果写入标量 `x` 寄存器。
 
@@ -3120,16 +3120,16 @@ NOTE: 此非重叠约束避免了在执行过程中输入向量上的 WAR 危害
  vslidedown.vi vd, vs2, uimm, vm      # vd[i] = vs2[i+uimm]
 ----
 
-对于 `vslidedown`，`vl` 中的值指定了写入目标元素的最大数量。超过 `vl` 的剩余元素将根据当前的尾部策略处理（参见 Section <<sec-agnostic>>）。
+对于 `vslidedown`，`vl` 中的值指定了写入目标元素的最大数量。超过 `vl` 的剩余元素将根据当前的尾部策略处理（参见 <<sec-agnostic>>）。
 
 源的起始索引可以通过 `rs1` 指定的 `x` 寄存器中的无符号整数来指定，也可以通过一个 5 位的立即数来指定，并且该立即数会零扩展为 XLEN 位。如果 XLEN > SEW，偏移量不会被截断为 SEW 位。
 
 ----
-  `vslidedown` 对于源元素的行为（对于滑动中的元素 i，`vstart` < `vl`）
+  vslidedown 对于源元素的行为（对于滑动中的元素 i，`vstart` < `vl`）
                    0 <= i+OFFSET < VLMAX   src[i] = vs2[i+OFFSET]
                VLMAX <= i+OFFSET           src[i] = 0
 
-  `vslidedown` 对于目标元素 i 的行为（对于滑动中的元素 i，`vstart` < `vl`）
+  vslidedown 对于目标元素 i 的行为（对于滑动中的元素 i，`vstart` < `vl`）
                    0 <= i < vstart         不变
               vstart <= i < vl             如果 v0.mask[i] 使能则 vd[i] = src[i]
                   vl <= i < VLMAX          遵循尾部策略
@@ -3148,7 +3148,7 @@ NOTE: 此非重叠约束避免了在执行过程中输入向量上的 WAR 危害
 
 剩余的 `vl`-1 个激活元素（从源向量寄存器组的索引 i 到目标向量寄存器组的索引 i+1）会被复制过来。
 
-`vl` 寄存器指定了从源值更新目标向量寄存器元素的最大数量，超过 `vl` 的剩余元素将根据当前的尾部策略处理（参见 Section<<sec-agnostic>>）。
+`vl` 寄存器指定了从源值更新目标向量寄存器元素的最大数量，超过 `vl` 的剩余元素将根据当前的尾部策略处理（参见 <<sec-agnostic>>）。
 
 ----
    vslide1up behavior when vl > 0
@@ -3174,7 +3174,7 @@ NOTE: 此非重叠约束避免了在执行过程中输入向量上的 WAR 危害
 
 `vslide1down` 指令将源向量寄存器组中从索引 _i_+1 开始的前 `vl`-1 个激活元素的值复制到目标向量寄存器组中的索引 _i_ 位置。
 
-`vl` 寄存器指定了从源值更新目标向量寄存器元素的最大数量，超过 `vl` 的剩余元素将根据当前的尾部策略处理（参见 Section <<sec-agnostic>>）。
+`vl` 寄存器指定了从源值更新目标向量寄存器元素的最大数量，超过 `vl` 的剩余元素将根据当前的尾部策略处理（参见 <<sec-agnostic>>）。
 
 ----
  vslide1down.vx  vd, vs2, rs1, vm      # vd[i] = vs2[i+1], vd[vl-1]=x[rs1]
@@ -3204,7 +3204,7 @@ NOTE: `vslide1down` 指令可以用来将值加载到向量寄存器中，而无
 
 ==== 向量寄存器收集指令
 
-向量寄存器收集指令从第一个源向量寄存器组读取元素，这些元素的位置由第二个源向量寄存器组给出。第二个向量中的索引值被视为无符号整数。源向量可以在任何索引 < VLMAX 处读取，而不考虑 `vl`。要写入目标寄存器的最大元素数由 `vl` 给出，超过 `vl` 的剩余元素将根据当前的尾部策略处理（参见 Section<<sec-agnostic>>）。该操作可以被屏蔽，并且对于未激活元素会遵循掩码无关/未干扰策略。
+向量寄存器收集指令从第一个源向量寄存器组读取元素，这些元素的位置由第二个源向量寄存器组给出。第二个向量中的索引值被视为无符号整数。源向量可以在任何索引 < VLMAX 处读取，而不考虑 `vl`。要写入目标寄存器的最大元素数由 `vl` 给出，超过 `vl` 的剩余元素将根据当前的尾部策略处理（参见 <<sec-agnostic>>）。该操作可以被屏蔽，并且对于未激活元素会遵循掩码无关/未干扰策略。
 
 ----
 vrgather.vv vd, vs2, vs1, vm     # vd[i] = (vs1[i] >= VLMAX) ? 0 : vs2[vs1[i]];
@@ -3264,7 +3264,7 @@ NOTE: 虽然可能，但 `vcompress` 是少数几个较难在非零 `vstart` 的
 没有提供逆向的 `vdecompress`，因为这个操作可以通过 iota 和一个掩码的 vrgather 来方便地合成：
 
 ----
-    `vdecompress` 的期望功能
+    vdecompress 的期望功能
       7 6 5 4 3 2 1 0     # vid
 
             e d c b a     # 打包的5元素向量
@@ -3414,7 +3414,7 @@ NOTE: 对于任何标准向量扩展来说，并不要求显式使用 Zvl32b 扩
 [cols="1,1,2,1,1"]
 [%autowidth,float="center",align="center",options="header"]
 |===
-| Extension | Minimum VLEN | Supported EEW |  FP32 | FP64
+| 扩展 | 最小的 VLEN | 支持的 EEW  |  FP32 | FP64
 
 | Zve32x    | 32    | 8, 16, 32     |   N   |  N
 | Zve32f    | 32    | 8, 16, 32     |   Y   |  N
@@ -3433,27 +3433,27 @@ NOTE: 目前没有标准支持处理不精确的陷阱，因此标准扩展必�
 
 所有 Zve* 扩展都支持 EEW 为 8、16 和 32，Zve64* 扩展还支持 EEW 为 64。
 
-所有 Zve* 扩展都支持向量配置指令（Section <<sec-vector-config>>）。
+所有 Zve* 扩展都支持向量配置指令（<<sec-vector-config>>）。
 
-所有 Zve* 扩展都支持所有向量加载和存储指令（Section <<sec-vector-memory>>），除了在 XLEN=32 时，Zve64* 扩展不支持索引值为 EEW=64。
+所有 Zve* 扩展都支持所有向量加载和存储指令（<<sec-vector-memory>>），除了在 XLEN=32 时，Zve64* 扩展不支持索引值为 EEW=64。
 
-所有 Zve* 扩展都支持所有向量整数指令（Section <<sec-vector-integer>>），但对于 EEW=64，Zve64* 不包括返回乘积高字的 vmulh 整数乘法变体（vmulh.vv、vmulh.vx、vmulhu.vv、vmulhu.vx、vmulhsu.vv、vmulhsu.vx）。
+所有 Zve* 扩展都支持所有向量整数指令（<<sec-vector-integer>>），但对于 EEW=64，Zve64* 不包括返回乘积高字的 vmulh 整数乘法变体（vmulh.vv、vmulh.vx、vmulhu.vv、vmulhu.vx、vmulhsu.vv、vmulhsu.vx）。
 
 NOTE: 产生乘积的高字可能需要大量额外的逻辑，对于较大的 EEW，这可能会增加很多门电路。
 
-所有 Zve* 扩展都支持所有向量定点运算指令（Section<<sec-vector-fixed-point>>），但在 Zve64* 中，EEW=64 时不包括 vsmul.vv 和 vsmul.vx。
+所有 Zve* 扩展都支持所有向量定点运算指令（<<sec-vector-fixed-point>>），但在 Zve64* 中，EEW=64 时不包括 vsmul.vv 和 vsmul.vx。
 
 NOTE: 与 vmulh 类似，vsmul 也需要大量额外的逻辑，且 64 位定点乘法相对较少见。
 
-所有 Zve* 扩展都支持所有向量整数单宽度和扩展宽度的规约操作（Section <<sec-vector-integer-reduce>> 节，<<sec-vector-integer-reduce-widen>> 节）。
+所有 Zve* 扩展都支持所有向量整数单宽度和扩展宽度的规约操作（<<sec-vector-integer-reduce>> 节，<<sec-vector-integer-reduce-widen>> 节）。
 
-所有 Zve* 扩展都支持所有向量掩码指令（Section <<sec-vector-mask>> 节）。
+所有 Zve* 扩展都支持所有向量掩码指令（<<sec-vector-mask>> 节）。
 
-所有 Zve* 扩展都支持所有向量置换指令（Section <<sec-vector-permute>>），但 Zve32x 和 Zve64x 不包括带有浮点操作数的置换指令，Zve64f 不包括带有 EEW=64 浮点操作数的置换指令。
+所有 Zve* 扩展都支持所有向量置换指令（<<sec-vector-permute>>），但 Zve32x 和 Zve64x 不包括带有浮点操作数的置换指令，Zve64f 不包括带有 EEW=64 浮点操作数的置换指令。
 
-Zve32x 扩展依赖于 Zicsr 扩展。Zve32f 和 Zve64f 扩展依赖于 F 扩展，并实现所有用于浮点操作数的向量浮点指令（第 <<sec-vector-float>> 节），支持 EEW=32的浮点操作数。对于 EEW=32，支持向量单宽度浮点减法操作（Section <<sec-vector-float-reduce>>）。
+Zve32x 扩展依赖于 Zicsr 扩展。Zve32f 和 Zve64f 扩展依赖于 F 扩展，并实现所有用于浮点操作数的向量浮点指令（第 <<sec-vector-float>> 节），支持 EEW=32的浮点操作数。对于 EEW=32，支持向量单宽度浮点减法操作（<<sec-vector-float-reduce>>）。
 
-Zve64d 扩展依赖于 D 扩展，并实现所有用于浮点操作数的向量浮点指令（Section <<sec-vector-float>>），支持 EEW=32 或 EEW=64 的浮点操作数（包括扩展指令以及 FP32 与 FP64 之间的转换）。支持 EEW=32 和 EEW=64 的向量单宽度浮点减法操作（Section <<sec-vector-float-reduce>>），以及从 FP32 到 FP64 的扩展减法操作。
+Zve64d 扩展依赖于 D 扩展，并实现所有用于浮点操作数的向量浮点指令（<<sec-vector-float>>），支持 EEW=32 或 EEW=64 的浮点操作数（包括扩展指令以及 FP32 与 FP64 之间的转换）。支持 EEW=32 和 EEW=64 的向量单宽度浮点减法操作（<<sec-vector-float-reduce>>），以及从 FP32 到 FP64 的扩展减法操作。
 
 ==== V扩展：面向应用处理器的向量扩展
 
@@ -3468,21 +3468,21 @@ NOTE: VLEN=128 是应用处理器的折中选择：更大的 VLEN 可在某些�
 
 V 扩展支持 EEW 取值 8、16、32 和 64。
 
-V 扩展支持向量配置指令（见 Section <<sec-vector-config>>）。
+V 扩展支持向量配置指令（见 <<sec-vector-config>>）。
 
-V 扩展支持所有向量加载/存储指令（见 Section <<sec-vector-memory>>），但当 XLEN=32 时，不支持索引值的 EEW=64。
+V 扩展支持所有向量加载/存储指令（见 <<sec-vector-memory>>），但当 XLEN=32 时，不支持索引值的 EEW=64。
 
-V 扩展支持所有向量整数指令（见 Section <<sec-vector-integer>>）。
+V 扩展支持所有向量整数指令（见 <<sec-vector-integer>>）。
 
-V 扩展支持所有向量定点算术指令（见 Section <<sec-vector-fixed-point>>）。
+V 扩展支持所有向量定点算术指令（见 <<sec-vector-fixed-point>>）。
 
-V 扩展支持所有向量整数单宽与加宽归约操作（见 Section <<sec-vector-integer-reduce>>，Section <<sec-vector-integer-reduce-widen>>）。
+V 扩展支持所有向量整数单宽与加宽归约操作（见 <<sec-vector-integer-reduce>>，<<sec-vector-integer-reduce-widen>>）。
 
-V 扩展支持所有向量掩码指令（见 Section <<sec-vector-mask>>）。
+V 扩展支持所有向量掩码指令（见 <<sec-vector-mask>>）。
 
-V 扩展支持所有向量置换指令（见 Section <<sec-vector-permute>>）。
+V 扩展支持所有向量置换指令（见 <<sec-vector-permute>>）。
 
-V 扩展依赖 F 和 D 扩展，并实现所有向量浮点指令（见 Section <<sec-vector-float>>），适用于 EEW=32 或 EEW=64 的浮点操作数（包括加宽指令以及 FP32 与 FP64 之间的转换）。支持 EEW=32 和 EEW=64 的单宽浮点归约（见 Section <<sec-vector-float-reduce>>），以及 FP32 到 FP64 的加宽归约。
+V 扩展依赖 F 和 D 扩展，并实现所有向量浮点指令（见 <<sec-vector-float>>），适用于 EEW=32 或 EEW=64 的浮点操作数（包括加宽指令以及 FP32 与 FP64 之间的转换）。支持 EEW=32 和 EEW=64 的单宽浮点归约（见 <<sec-vector-float-reduce>>），以及 FP32 到 FP64 的加宽归约。
 
 
 [NOTE]
@@ -3504,10 +3504,7 @@ Zvfh 扩展提供对 IEEE 754-2008 binary16 向量的支持。
 <<sec-vfslide1up>> 和 <<sec-vfslide1down>>。
 这些指令的 EEW=16 浮点操作数采用 binary16 格式。
 
-此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：
-- 浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）
-- 整数到浮点的加宽转换（vfwcvt.f.x[u].v）
-- 这些指令在 SEW=8 时被定义。
+此外，Zvfh 扩展提供 8 位整数与 binary16 之间的转换：浮点到整数的窄化转换（vfncvt[.rtz].x[u].f.w）和 整数到浮点的加宽转换（vfwcvt.f.x[u].v）： 这些指令在 SEW=8 时被定义。
 
 Zvfh 扩展依赖于 Zve32f 和 Zfhmin 扩展。
 

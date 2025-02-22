@@ -1,4 +1,4 @@
-.vfrsqrt7.v common-case lookup table contents
+.vfrsqrt7.v 常见情况查找表内容
 [%autowidth,float=center,align=center,options="header"]
 |===
 

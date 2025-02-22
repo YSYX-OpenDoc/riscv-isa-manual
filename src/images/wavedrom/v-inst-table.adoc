@@ -103,7 +103,7 @@
 
 <<<
 
-.VRXUNARY0 encoding space
+.VRXUNARY0 编码空间
 [cols="2,14"]
 |===
 |  vs2  |
@@ -111,7 +111,7 @@
 | 00000 | vmv.s.x
 |===
 
-.VWXUNARY0 encoding space
+.VWXUNARY0 编码空间
 [cols="2,14"]
 |===
 |  vs1  |
@@ -121,7 +121,7 @@
 | 10001 | vfirst
 |===
 
-.VXUNARY0 encoding space
+.VXUNARY0 编码空间
 [cols="2,14"]
 |===
 |  vs1  |
@@ -134,7 +134,7 @@
 | 00111 | vsext.vf2
 |===
 
-.VRFUNARY0 encoding space
+.VRFUNARY0 编码空间
 [cols="2,14"]
 |===
 |  vs2  |
@@ -142,7 +142,7 @@
 | 00000 | vfmv.s.f
 |===
 
-.VWFUNARY0 encoding space
+.VWFUNARY0 编码空间
 [cols="2,14"]
 |===
 |  vs1  |
@@ -150,7 +150,7 @@
 | 00000 | vfmv.f.s
 |===
 
-.VFUNARY0 encoding space
+.VFUNARY0 编码空间
 [cols="2,14"]
 |===
 | vs1 | name
@@ -183,7 +183,7 @@
 | 10111 | vfncvt.rtz.x.f.w
 |===
 
-.VFUNARY1 encoding space
+.VFUNARY1 编码空间
 [cols="2,14"]
 |===
 |  vs1  | name
@@ -195,7 +195,7 @@
 |===
 
 
-.VMUNARY0 encoding space
+.VMUNARY0 编码空间
 [cols="2,14"]
 |===
 |  vs1  |
