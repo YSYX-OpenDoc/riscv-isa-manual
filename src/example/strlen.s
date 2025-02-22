@@ -20,3 +20,4 @@ loop:
     sub a0, a3, a0        # Subtract start address+bump
 
     ret
+    
