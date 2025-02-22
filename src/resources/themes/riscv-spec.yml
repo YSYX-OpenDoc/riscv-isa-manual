@@ -15,10 +15,10 @@ font:
       bold: Montserrat-Medium.ttf
       light: Montserrat-Light.ttf
     code:
-      normal: cmunbtl.ttf
-      bold: cmunbtl.ttf
-      italic: cmunbto.ttf
-      bold_italic: cmunbto.ttf
+      normal: JetBrainsMonoNL-Regular.ttf
+      bold: JetBrainsMonoNL-Bold.ttf
+      italic: JetBrainsMonoNL-Italic.ttf
+      bold_italic: JetBrainsMonoNL-BoldItalic.ttf
     # M+ 1mn supports ASCII and the circled numbers used for conums
     M+ 1mn:
       normal: mplus-1mn-regular.ttf
@@ -78,9 +78,7 @@ link:
   # codespan is currently used for inline monospaced in prose and table cells
 codespan:  
     font-color: 000000
-    #font_family: code
-    #font_family: Droid Fallback
-    font_family: M+ 1mn
+    font_family: code
     font_style: normal
 #    font-size: 11.5
 menu_caret_content: " <font size=\"1.15em\"><color rgb=\"000000\">\u203a</color></font> "
