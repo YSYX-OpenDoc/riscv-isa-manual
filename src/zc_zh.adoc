@@ -1065,7 +1065,7 @@ PUSH、POP、POPRET 用于减少函数序言和尾声的大小。
 
 此示例说明了 PUSH 和 POPRET 的使用。
 
-EMBench 基准测试 picojpeg 中的函数 processMarkers 在 GitHub 上的以下文件中：https://github.com/embench/embench-iot/blob/master/src/picojpeg/libpicojpeg.c[libpicojpeg.c]
+EMBench 基准测试 picojpeg 中的函数 processMarkers 在 GitHub 上的以下文件中: https://github.com/embench/embench-iot/blob/master/src/picojpeg/libpicojpeg.c[libpicojpeg.c]
 
 序言和尾声使用 GCC10 编译为：
 
