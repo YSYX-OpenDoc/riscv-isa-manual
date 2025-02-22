@@ -1606,9 +1606,8 @@ NOTE: 标准的向量加载指令访问的内存值与目标寄存器元素的�
 `vadc` 和 `vsbc` 分别将源操作数和进位输入或借位输入相加或相减，并将结果写入向量寄存器 `vd`。这些指令被编码为掩码指令（`vm=0`），但它们作用于并写回所有主体元素。对应未掩码版本的编码（`vm=1`）被保留。
 
 `vmadc` 和 `vmsbc` 分别将源操作数相加或相减，若掩码（`vm=0`），还可选择加上进位输入或减去借位输入，并将结果写回掩码寄存器 `vd`。如果未掩码（`vm=1`），则没有进位输入或借位输入。这些指令作用于并写回所有体元素，即使被掩码。因为这些指令产生一个掩码值，所以它们总是采用与尾部无关的策略。
-
-
 ----
+
  # 计算带进位的和
 
  # vd[i] = vs2[i] + vs1[i] + v0.mask[i]
@@ -1994,6 +1993,7 @@ vnmsub.vx vd, rs1, vs2, vm # vd[i] = -(x[rs1] * vd[i]) + vs2[i]
 ==== 向量宽整数乘加指令
 
 宽整数乘加指令将 SEW 位 * SEW 位乘法的完整 2*SEW 位乘积加到 2*SEW 位值上，产生 2*SEW 位的结果。支持所有有符号和无符号乘法操作数的组合。
+
 ----
  # 拓宽无符号整数乘加，覆盖加数
 vwmaccu.vv vd, vs1, vs2, vm # vd[i] = +(vs1[i] * vs2[i]) + vd[i] 
@@ -2083,23 +2083,23 @@ vssub.vx vd, vs2, rs1, vm # 向量-标量
 NOTE: 对于 `vasub`，只有在使用 `rnu` 或 `rne` 舍入模式时，从最小数减去最大数才会发生溢出。
 
 ----
-# 平均加法
+ # 平均加法
 
-# 无符号整数的平均加法
+ # 无符号整数的平均加法
 vaaddu.vv vd, vs2, vs1, vm   # roundoff_unsigned(vs2[i] + vs1[i], 1)
 vaaddu.vx vd, vs2, rs1, vm   # roundoff_unsigned(vs2[i] + x[rs1], 1)
 
-# 有符号整数的平均加法
+ # 有符号整数的平均加法
 vaadd.vv vd, vs2, vs1, vm   # roundoff_signed(vs2[i] + vs1[i], 1)
 vaadd.vx vd, vs2, rs1, vm   # roundoff_signed(vs2[i] + x[rs1], 1)
 
-# 平均减法
+ # 平均减法
 
-# 无符号整数的平均减法
+ # 无符号整数的平均减法
 vasubu.vv vd, vs2, vs1, vm   # roundoff_unsigned(vs2[i] - vs1[i], 1)
 vasubu.vx vd, vs2, rs1, vm   # roundoff_unsigned(vs2[i] - x[rs1], 1)
 
-# 有符号整数的平均减法
+ # 有符号整数的平均减法
 vasub.vv vd, vs2, vs1, vm   # roundoff_signed(vs2[i] - vs1[i], 1)
 vasub.vx vd, vs2, rs1, vm   # roundoff_signed(vs2[i] - x[rs1], 1)
 ----
@@ -2138,14 +2138,15 @@ vssra.vi vd, vs2, uimm, vm # vd[i] = roundoff_signed(vs2[i], uimm)
 ==== 向量定点裁剪指令（缩小位宽）
 
 `vnclip` 指令用于将定点值打包到较窄的目标格式中。该指令支持舍入、缩放和饱和到最终目标格式。源数据位于由 `vs2` 指定的向量寄存器组中。缩放移位量的值可以来自向量寄存器组 `vs1`、标量整数寄存器 `rs1` 或零扩展的 5 位立即数。向量或标量移位量值的低 lg2(2*SEW) 位（例如，SEW=64 位到 SEW=32 位缩小操作时的低 6 位）用于控制右移量，从而提供缩放。
+
 ----
-# 无符号裁剪
-#                                SEW                           2*SEW    SEW
+ # 无符号裁剪
+ #                                SEW                           2*SEW    SEW
  vnclipu.wv vd, vs2, vs1, vm  # vd[i] = clip(roundoff_unsigned(vs2[i], vs1[i]))
  vnclipu.wx vd, vs2, rs1, vm  # vd[i] = clip(roundoff_unsigned(vs2[i], x[rs1]))
  vnclipu.wi vd, vs2, uimm, vm # vd[i] = clip(roundoff_unsigned(vs2[i], uimm))
 
-# 有符号裁剪
+ # 有符号裁剪
  vnclip.wv vd, vs2, vs1, vm  # vd[i] = clip(roundoff_signed(vs2[i], vs1[i]))
  vnclip.wx vd, vs2, rs1, vm  # vd[i] = clip(roundoff_signed(vs2[i], x[rs1]))
  vnclip.wi vd, vs2, uimm, vm # vd[i] = clip(roundoff_signed(vs2[i], uimm))
