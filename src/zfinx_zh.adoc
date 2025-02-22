@@ -1,5 +1,5 @@
 [[sec:zfinx]]
-== “Zfinx”，“Zdinx”，“Zhinx”，“Zhinxmin”扩展：整数寄存器中的浮点，版本 1.0
+== “Zfinx”“Zdinx”“Zhinx”“Zhinxmin”扩展：整数寄存器中的浮点，版本 1.0
 
 本章定义了“Zfinx”扩展（发音为 “z-f-in-x”）。该扩展提供了一系列指令，其功能与标准单精度浮点 F 扩展中的指令类似，但操作对象为通用整数寄存器 x，而非浮点寄存器 f。本章还定义了“Zdinx”、“Zhinx”和“Zhinxmin”扩展，它们为其他浮点精度提供了类似的指令支持。
 
