@@ -405,12 +405,12 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 
 ["ditaa",shadows=false, separation=false, fontsize: 14,float="center"]
 ....
-+----------+     +---------+
++----------+     +---------+ 
 |  Hart 0  | ... |  Trace  |
 +----------+     +---------+
    ↑     ↓         ↑     ↓
 +--------------------------+
-|       共享内存          |
+|       Shared memory      |
 +--------------------------+
 ....
 
@@ -438,80 +438,80 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 
 所有指令的转换：
 
-* <<fetch, Fetch instruction>>：这个转换表示一个新的指令实例的取指和解码，作为之前已取指指令实例（或初始取指地址）的程序顺序后继。
+* <<fetch, 取指>>：这个转换表示一个新的指令实例的取指和解码，作为之前已取指指令实例（或初始取指地址）的程序顺序后继。
 
-模型假设指令内存是固定的；它不描述自修改代码的行为。特别地，<<fetch, Fetch instruction>> 转换不会生成内存加载操作，且共享内存不参与该转换。相反，模型依赖于一个外部预言机 (oracle)，当给定该预言机内存位置时,它将提供一个操作码。
+模型假设指令内存是固定的；它不描述自修改代码的行为。特别地，<<fetch, 取指>> 转换不会生成内存加载操作，且共享内存不参与该转换。相反，模型依赖于一个外部预言机 (oracle)，当给定该预言机内存位置时,它将提供一个操作码。
 
 [circle]
-* <<reg_write, Register write>>：这是对寄存器值的写操作。
+* <<reg_write, 寄存器写入>>：这是对寄存器值的写操作。
 
-* <<reg_read, Register read>>：这是从最近的程序顺序前驱指令实例读取寄存器值，该前驱指令实例向该寄存器写入数据。
+* <<reg_read, 寄存器读取>>：这是从最近的程序顺序前驱指令实例读取寄存器值，该前驱指令实例向该寄存器写入数据。
 
-* <<sail_interp, Pseudocode internal step>>：这涵盖了伪代码内部的计算：算术运算、函数调用等。
+* <<sail_interp, 伪代码内部步骤>>：这涵盖了伪代码内部的计算：算术运算、函数调用等。
 
-* <<finish, Finish instruction>>：指令的伪代码一旦执行完毕，指令无法重启，内存访问无法丢弃，所有内存效果均已生效。对于条件分支和间接跳转指令，任何不涉及写入 pc 寄存器的地址获取的后继指令将被丢弃，并且其下的指令实例树也将被丢弃。
+* <<finish, 完成指令>>：指令的伪代码一旦执行完毕，指令无法重启，内存访问无法丢弃，所有内存效果均已生效。对于条件分支和间接跳转指令，任何不涉及写入 pc 寄存器的地址获取的后继指令将被丢弃，并且其下的指令实例树也将被丢弃。
 
 特定于加载指令的转换：
 
 [circle]
-* <<initiate_load, Initiate memory load operations>>：此时加载指令的内存足迹已暂时确定（如果之前的指令被重启，则可能会发生变化），并且其各个内存加载操作可以开始生效。
+* <<initiate_load, 启动内存加载操作>>：此时加载指令的内存足迹已暂时确定（如果之前的指令被重启，则可能会发生变化），并且其各个内存加载操作可以开始生效。
 
 [disc]
-* <<sat_from_forwarding, Satisfy memory load operation by forwarding from unpropogated stores>>：通过从程序顺序前的内存存储操作转发，部分或完全满足单个内存加载操作。
+* <<sat_from_forwarding, 通过从未传播的存储中转发来满足内存加载操作>>：通过从程序顺序前的内存存储操作转发，部分或完全满足单个内存加载操作。
 
-* <<sat_from_mem, Satisfy memory load operation from memory>>：这完全满足了来自内存的单个内存加载操作的所有未完成部分。
+* <<sat_from_mem, 从内存中满足内存加载操作>>：这完全满足了来自内存的单个内存加载操作的所有未完成部分。
 
 [circle]
-* <<complete_loads, Complete load operations>>：此时，指令的所有内存加载操作已被完全满足，指令的伪代码可以继续执行。加载指令在此之前可能会被重启。但在某些条件下，模型可能会将加载指令视为不可重启，即使在它完成之前。
+* <<complete_loads, 完成加载操作>>：此时，指令的所有内存加载操作已被完全满足，指令的伪代码可以继续执行。加载指令在此之前可能会被重启。但在某些条件下，模型可能会将加载指令视为不可重启，即使在它完成之前。
 
 特定于存储指令的转换：
 
 [circle]
-* <<initiate_store_footprint, Initiate memory store operation footprints>>：此时存储的内存足迹已暂时确定。
+* <<initiate_store_footprint, 启动内存存储操作的足迹>>：此时存储的内存足迹已暂时确定。
 
-* <<instantiate_store_value, Instantiate memory store operation values>>：此时，内存存储操作已具备值，程序顺序后继的加载操作可以通过从这些存储中转发来满足。
+* <<instantiate_store_value, 实例化内存存储操作的值>>：此时，内存存储操作已具备值，程序顺序后继的加载操作可以通过从这些存储中转发来满足。
 
-* <<commit_stores, Commit store instruction>>：此时，存储操作已被确保执行（指令不再可重启或丢弃），并可以开始将其传播至内存。
+* <<commit_stores, 提交存储指令>>：此时，存储操作已被确保执行（指令不再可重启或丢弃），并可以开始将其传播至内存。
 
 [disc]
-* <<prop_store, Propagate store operation>>：将单个内存存储操作传播到内存。
+* <<prop_store, 传播存储操作>>：将单个内存存储操作传播到内存。
 
 [circle]
-* <<complete_stores, Complete store operations>>：此时，指令的所有内存存储操作已传播到内存，指令伪代码可以继续执行。
+* <<complete_stores, 完成存储操作>>：此时，指令的所有内存存储操作已传播到内存，指令伪代码可以继续执行。
 
 特定于 `sc` 指令的转换：
 
 [disc]
-* <<early_sc_fail, Early sc fail>>：导致 `sc` 失败，可能是自发失败，也可能是因为它没有与程序顺序前的 `lr` 配对。
+* <<early_sc_fail, 早期 SC 失败>>：导致 `sc` 失败，可能是自发失败，也可能是因为它没有与程序顺序前的 `lr` 配对。
 
-* <<paired_sc, Paired sc>>：此转换表示 `sc` 与 `lr` 配对，可能会成功。
+* <<paired_sc, 配对的 SC>>：此转换表示 `sc` 与 `lr` 配对，可能会成功。
 
-* <<commit_sc, Commit and propagate store operation of an sc>>：这是 `<<commit_stores, Commit store instruction>>` 和 `<<prop_store, Propagate store operation>>` 转换的原子执行，只有在 `lr` 读取的存储没有被覆盖的情况下才会启用。
+* <<commit_sc, 提交并传播 SC 的存储操作>>：这是 `<<commit_stores, 提交存储指令>>` 和 `<<prop_store, 传播存储操作>>` 转换的原子执行，只有在 `lr` 读取的存储没有被覆盖的情况下才会启用。
 
-* <<late_sc_fail, Late sc fail>>：导致 `sc` 失败，可能是自发失败，也可能是因为 `lr` 读取的存储已被覆盖。
+* <<late_sc_fail, 晚期 SC 失败>>：导致 `sc` 失败，可能是自发失败，也可能是因为 `lr` 读取的存储已被覆盖。
 
 特定于 AMO 指令的转换：
 
 [disc]
-* <<do_amo, Satisfy, commit and propagate operations of an AMO>>：这是满足加载操作、执行所需算术运算，并传播存储操作所需的所有转换的原子执行。
+* <<do_amo, Satisfy, 提交并传播 AMO 的操作>>：这是满足加载操作、执行所需算术运算，并传播存储操作所需的所有转换的原子执行。
 
 特定于 fence 指令的转换：
 
 [circle]
-* <<commit_fence, Commit fence>>
+* <<commit_fence, 提交 fence 指令>>
 
-标记为 latexmath:[$\circ$] 的转换可以在其前置条件满足时立即执行，而无需排除其他行为；而 latexmath:[$\bullet$] 则不可以。尽管 <<fetch, Fetch instruction>> 标记为 latexmath:[$\bullet$]，但只要它没有被执行无限次，它也可以立即执行。
+标记为 latexmath:[$\circ$] 的转换可以在其前置条件满足时立即执行，而无需排除其他行为；而 latexmath:[$\bullet$] 则不可以。尽管 <<fetch, 取指>> 标记为 latexmath:[$\bullet$]，但只要它没有被执行无限次，它也可以立即执行。
 
 一个非 AMO 加载指令的实例，在被提取后，通常会经历以下转换顺序：
 
-. <<reg_read, Register read>>
-. <<<initiate_load, Initiate memory load operations>>
-. <<sat_by_forwarding, Satisfy memory load operation by forwarding from unpropagated stores>> 与/或 <<sat_from_mem, Satisfy memory load operation from memory>>（根据需要满足实例的所有加载操作）
-. <<complete_loads, Complete load operations>>
-. <<reg_write, Register write>>
-. <<finish, Finish instruction>>
+. <<reg_read, 寄存器读取>>
+. <<initiate_load, 启动内存加载操作>>
+. <<sat_by_forwarding, 通过从未传播的存储中转发来满足内存加载操作>> 和/或 <<sat_from_mem, 从内存中满足内存加载操作>>（根据需要满足实例的所有加载操作）
+. <<complete_loads, 完成加载操作>>
+. <<reg_write, 寄存器写入>>
+. <<finish, 完成指令>>
 
-在上述转换之前、之间和之后，可能会出现任何数量的 <<sail_interp, Pseudocode internal step>> 转换。此外，直到被执行之前，<<fetch, Fetch instruction>> 转换将一直可用，用于提取下一个程序位置的指令。
+在上述转换之前、之间和之后，可能会出现任何数量的 <<sail_interp, 伪代码内部步骤>> 转换。此外，直到被执行之前，<<fetch, 取指>> 转换将一直可用，用于提取下一个程序位置的指令。
 
 操作模型的非正式描述部分已结束。接下来的章节将描述正式的操作模型。
 
@@ -597,7 +597,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 
 对于一个具有非空 _mem_loads_ 的加载指令实例，如果它的所有加载操作都已满足（即没有未满足的加载切片），则该指令实例被称为完全满足。
 
-非正式地，如果加载（和 `sc`）指令提供的源寄存器的值已完成，则称指令实例具有完全确定的数据。类似地，如果加载（和 `sc`）指令提供其内存操作地址寄存器的值已完成，则称其具有完全确定的内存足迹。正式地，我们首先定义完全确定的寄存器写入的概念：来自指令实例  _reg_writes_ 的寄存器写入 latexmath:[$i$] 被称为完全确定，如果满足以下条件之一：
+非正式地，如果加载（和 `sc`）指令提供的源寄存器的值已完成，则称指令实例具有完全确定的数据。类似地，如果加载（和 `sc`）指令提供其内存操作地址寄存器的值已完成，则称其具有完全确定的内存足迹。正式地，我们首先定义完全确定的寄存器写入的概念：如果满足以下条件之一，则来自 _reg_writes_ 的寄存器写入 latexmath:[$i$] 指令实例被认为是完全确定的：
 
 . latexmath:[$i$] 已完成；
 . latexmath:[$w$] 写入的值不受 latexmath:[$i$] 所执行的内存操作影响（即从内存加载的值或 `sc` 的结果），并且对于每一个影响 latexmath:[$i$] 的每个寄存器读取，latexmath:[$w$] 所读取的寄存器写入是完全确定的（或者 latexmath:[$i$] 从初始寄存器状态读取）。
@@ -704,10 +704,10 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 [[sat_from_mem]]
 ===== 从内存满足内存加载操作
 
-对于非 AMO 加载指令或 AMO 指令的指令实例 latexmath:[$i$]，在 AMO 上下文的 <<do_amo、Satisfy、commit 和 propagate operations of an AMO>> 转换中，任何 latexmath:[$i.\textit{mem\_loads}$] 中的内存加载操作 latexmath:[$mlo$]，如果其有未满足的片段，且满足 <<sat_by_forwarding，Satisfy memory load operation by forwarding from unpropagated stores>> 的所有条件，则可以通过从内存中转发未传播的存储来满足。操作：令 latexmath:[$msoss$] 为覆盖 latexmath:[$mlo$] 未满足片段的内存存储操作片段，并应用 <<do_amo，Satisfy memory operation by forwarding from unpropagated stores>> 的操作。
+对于非 AMO 加载指令或 AMO 指令的指令实例 latexmath:[$i$]，在 AMO 上下文的 <<do_amo, Saitsfy, commit and propagate operations of an AMO>> 转换中，任何 latexmath:[$i.\textit{mem\_loads}$] 中的内存加载操作 latexmath:[$mlo$]，如果其有未满足的片段，且满足 <<sat_by_forwarding，通过从未传播的存储中转发来满足内存加载操作>> 的所有条件，则可以通过从内存中转发未传播的存储来满足。操作：令 latexmath:[$msoss$] 为覆盖 latexmath:[$mlo$] 未满足片段的内存存储操作片段，并应用 <<do_amo，通过从未传播的存储中转发来满足内存操作>> 的操作。
 [NOTE]
 ====
-请注意，<<do_amo, Satisfy memory operation by forwarding from unpropagates stores>> 可能会留下内存加载操作的某些片段未满足，这些未满足的片段将需要通过再次进行转换，或通过执行 <<sat_from_mem, Satisfy memory load operation from memory>> 来满足。另一方面，<<sat_from_mem, Satisfy memory load operation from memory>> 将始终满足内存加载操作的所有未满足片段。
+请注意，<<do_amo, 通过从未传播的存储中转发来满足内存操作>> 可能会留下内存加载操作的某些片段未满足，这些未满足的片段将需要通过再次进行转换，或通过执行 <<sat_from_mem, 从内存中满足内存加载操作>> 来满足。另一方面，<<sat_from_mem, 从内存中满足内存加载操作>> 将始终满足内存加载操作的所有未满足片段。
 ====
 [[complete_loads]]
 ===== 完成加载操作
@@ -749,7 +749,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 [[commit_stores]]
 ===== 提交存储指令
 
-在状态 Pending_mem_stores(_store_continuation_) 下，非 `sc` 存储指令或在 <<commit_sc，Commit and propagate store operation of an `sc`>> 转换上下文中的 `sc` 指令实例 latexmath:[$i$]，如果满足以下条件，则可以提交（与传播不同）：
+在状态 Pending_mem_stores(_store_continuation_) 下，非 `sc` 存储指令或在 <<commit_sc，提交并传播 `sc` 的存储操作>> 转换上下文中的 `sc` 指令实例 latexmath:[$i$]，如果满足以下条件，则可以提交（与传播不同）：
 
 . latexmath:[$i$] 具有完全确定的数据；
 . 所有程序顺序之前的条件分支和间接跳转指令都已完成；
@@ -778,8 +778,8 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 
 一个未完成的指令实例 latexmath:[$j$] 是 不可重启的，当且仅当：
 
-. 不存在存储指令 latexmath:[$s$] 和 latexmath:[$s$] 的未传播内存存储操作 latexmath:[$mso$]，使得对 latexmath:[$mso$] 执行 <<prop_store, Propagate store operation>> 转换的操作会导致 latexmath:[$j$] 被重启；
-. 不存在未完成的加载指令 latexmath:[$l$] 和 latexmath:[$l$] 的内存加载操作 latexmath:[$mlo$]，使得对 latexmath:[$mlo$] 执行 <<sat_by_forwarding, Satisfy memory load operation by forwarding from unpropagated stores>>/<<sat_from_mem, Satisfy memory load operation from memory>> 转换的操作（即使 latexmath:[$mlo$] 已经满足）会导致 latexmath:[$j$] 被重启。
+. 不存在存储指令 latexmath:[$s$] 和 latexmath:[$s$] 的未传播内存存储操作 latexmath:[$mso$]，使得对 latexmath:[$mso$] 执行 <<prop_store, 传播存储操作>> 转换的操作会导致 latexmath:[$j$] 被重启；
+. 不存在未完成的加载指令 latexmath:[$l$] 和 latexmath:[$l$] 的内存加载操作 latexmath:[$mlo$]，使得对 latexmath:[$mlo$] 执行 <<sat_by_forwarding, 通过从未传播的存储中转发来满足内存加载操作>>/<<sat_from_mem, 从内存中满足内存加载操作>> 转换的操作（即使 latexmath:[$mlo$] 已经满足）会导致 latexmath:[$j$] 被重启。
 
 操作：
 
@@ -794,14 +794,14 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 
 . latexmath:[$i'$] 已完成；
 . 每个已转发到 latexmath:[$i'$] 的内存存储操作都已传播；
-. 满足 <<commit_stores, Commit store instruction>> 的条件；
-. 满足 <<prop_store, Propagate store instruction>> 的条件（注意 `sc` 指令只能有一个内存存储操作）；
+. 满足 <<commit_stores, 提交存储指令>> 的条件；
+. 满足 <<prop_store, 传播存储指令>> 的条件（注意 `sc` 指令只能有一个内存存储操作）；
 . 对于来自 latexmath:[$msoss$] 的每个存储切片 latexmath:[$msos$]，自从 latexmath:[$msos$] 被传播到内存以来，latexmath:[$msos$] 在任何时刻都没有被来自非 latexmath:[$h$] 的硬件线程的存储在共享内存中覆盖。
 
 操作：
 
-. 执行 <<commit_stores, Commit store instruction>> 的操作；
-. 执行 <<prop_store, Propagate store instruction>> 的操作。
+. 执行 <<commit_stores, 提交存储指令>> 的操作；
+. 执行 <<prop_store, 传播存储指令>> 的操作。
 
 [[late_sc_fail]]
 ===== 延迟 `sc` 失败
@@ -812,7 +812,7 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 . 将 latexmath:[$i$] 的状态更新为 Plain(_store_continuation(false)_)。
 [NOTE]
 ====
-为了提高效率，`rmem` 工具仅在无法进行 <<commit_sc, Commit and propagate store operation of an sc>> 转换时允许此转换。这不会影响允许的最终状态集，但在交互式探索时，如果 `sc` 失败，则应使用 <<early_sc_fail, Early sc fail>> 转换，而不是等待此转换。
+为了提高效率，`rmem` 工具仅在无法进行 <<commit_sc, 提交并传播一个 sc 的存储操作>> 转换时允许此转换。这不会影响允许的最终状态集，但在交互式探索时，如果 `sc` 失败，则应使用 <<early_sc_fail, 早期 sc 失败>> 转换，而不是等待此转换。
 ====
 [[complete_stores]]
 ===== 完成存储操作
@@ -824,18 +824,18 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 
 处于 Pending_mem_loads(load_continuation) 状态的 AMO 指令实例 latexmath:[$i$] 可以执行其内存访问操作，如果可以执行以下一系列转换而没有任何中间转换：
 
-. <<sat_from_mem, Satisfy memory load operation from memory>>
-. <<complete_loads, Complete load operations>>
-. <<sail_interp, Pseudocode internal step>>（零次或多次）
-. <<instantiate_store_value, Instantiate memory store operation values>>
-. <<commit_stores, Commit store instruction>>
-. <<prop_store, Propagate store operation>>
-. <<complete_stores, Complete store operations>>
+. <<sat_from_mem, 从内存中满足内存加载操作>>
+. <<complete_loads, 完成加载操作>>
+. <<sail_interp, 伪代码内部步骤>>（零次或多次）
+. <<instantiate_store_value, 实例化内存存储操作的值>>
+. <<commit_stores, 提交存储指令>>
+. <<prop_store, 传播存储操作>>
+. <<complete_stores, 完成存储操作>>
 
-此外，除不要求 latexmath:[$i$] 处于 Plain(Done) 状态外，<<finish, Finish instruction>> 的条件在这些转换之后依然成立。操作：依次执行上述转换（不包括 <<finish, Finish instruction>>），且没有任何中间转换。
+此外，除不要求 latexmath:[$i$] 处于 Plain(Done) 状态外，<<finish, 完成指令>> 的条件在这些转换之后依然成立。操作：依次执行上述转换（不包括 <<finish, 完成指令>>），且没有任何中间转换。
 [NOTE]
 ====
-请注意，程序顺序中的前置存储操作不能被转发到 AMO 的加载操作。这是因为上述转换序列没有包括转发转换。但即使它包括转发转换，当尝试进行 <<prop_store, Propagate store operation>> 转换时，序列也会失败，因为该转换要求所有程序顺序中前置的存储操作与重叠的内存足迹必须被传播，而转发要求存储操作未传播。
+请注意，程序顺序中的前置存储操作不能被转发到 AMO 的加载操作。这是因为上述转换序列没有包括转发转换。但即使它包括转发转换，当尝试进行 <<prop_store, 传播存储操作>> 转换时，序列也会失败，因为该转换要求所有程序顺序中前置的存储操作与重叠的内存足迹必须被传播，而转发要求存储操作未传播。
 
 此外，AMO 的存储也不能转发到程序顺序的后继加载操作。在执行上述转换之前，AMO 的存储操作没有其值，因此不能进行转发；在执行上述转换之后，存储操作已经被传播，因此也不能进行转发。
 ====
@@ -907,5 +907,5 @@ rmem 提供命令行和网页两种界面。网页界面完全在客户端运行
 * 该模型支持 RV64I 和 RV64A 用户级，但不支持不对齐的原子粒度 PMA 或总存储排序扩展 "Ztso"。适配 RV32I/A 以及 G、Q 和 C 扩展应该相对简便，但我们尚未进行尝试。此适配主要包括为指令编写 Sail 代码，且对并发模型的更改极少，甚至没有。
 * 该模型仅支持常规内存访问（不包括 I/O 访问）。
 * 该模型不考虑 TLB 相关效应。
-* 该模型假设指令内存是固定的。<<fetch, Fetch instruction>> 转换不会生成内存加载操作，且共享内存不参与此过程。模型依赖外部预言机，根据内存位置返回操作码。
+* 该模型假设指令内存是固定的。<<fetch, 取指>> 转换不会生成内存加载操作，且共享内存不参与此过程。模型依赖外部预言机，根据内存位置返回操作码。
 * 该模型不涵盖异常、陷阱和中断。

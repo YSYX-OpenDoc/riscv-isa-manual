@@ -192,7 +192,7 @@ include::mm-formal_zh.adoc[]
 //Appendices for Vector
 include::vector-examples_zh.adoc[]
 include::calling-convention_zh.adoc[]
-include::fraclmul_zh.adoc[]
+//include::fraclmul_zh.adoc[]
 //End of Vector appendices
 include::index.adoc[]
 // this is generated generated from index markers.
