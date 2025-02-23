@@ -18,7 +18,7 @@ PAUSE 指令的效果持续时间在不同实现之间以及同一实现内部�
 一系列连续执行的 PAUSE 指令可以产生累积的延迟效果，总延迟时间与 PAUSE 指令的数量大致成正比。然而，在可移植代码的自旋等待循环中，在重新评估循环条件之前务必仅使用一条 PAUSE 指令；否则在某些实现中，硬件线程可能会非必要地停滞过长时间，从而导致系统性能下降。
 ====
 
-PAUSE 指令采用 FENCE 指令的编码格式，并定义其字段为： _pred_=`W`、_succ_=`0`、_fm_=`0`、_rd_=`x0` 以及 _rs1_=`x0`。
+`PAUSE` 指令采用 FENCE 指令的编码格式，并定义其字段为： _pred_=`W`、_succ_=`0`、_fm_=`0`、_rd_=`x0` 以及 _rs1_=`x0`。
 
 //include::images/wavedrom/zihintpause-hint.adoc[]
 //[zihintpause-hint]

@@ -249,7 +249,7 @@ RISC-V 基础 ISA 支持小端序（little-endian）或大端序（big-endian）
 |===
 | |包含（Contained）|请求（Requested）|不可见（Invisible）|致命（Fatal）
 |执行终止（Execution terminates）|No |No^1^|No |Yes
-|软件没有反应（Software is oblivious）|No |No |Yes |Yes^2^|由环境处理（Handled by environment）|No |Yes |Yes |Yes
+|软件无反应（Software is oblivious）|No |No |Yes |Yes^2^|环境处理（Handled by environment）|No |Yes |Yes |Yes
 |===
 <<trapcharacteristics>> 陷阱特性说明：1）执行终止可能是通过请求产生的。2）非精确的致命陷阱可能会被软件观察到。
 
