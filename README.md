@@ -35,3 +35,6 @@ Alternative build methods, such as local builds and GitHub Action builds, are al
 ```
 make docker
 ```
+If you see an error message like:
+Fontconfig error: Cannot load default config file: No such file: (null)
+when running `make docker`, don’t worry. This is a benign error and does not affect the build process or the final result.
