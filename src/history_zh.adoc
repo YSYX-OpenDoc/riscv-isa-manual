@@ -3,44 +3,44 @@
 
 === “为什么开发新的 ISA？”——来自伯克利小组的理由
 
-我们开发 RISC-V 是为了满足我们在研究和教育中的需求，我们小组特别关注研究理念的实际硬件实现（自本规范的第一版以来，我们已经完成了十一种不同的 RISC-V 芯片制造），并为学生提供实际的实现以在课堂上探索（RISC-V 处理器 RTL 设计已在伯克利的多个本科和研究生课程中使用）。在我们当前的研究中，我们特别关注由于传统晶体管缩放的终结而导致的向专业化和异构加速器的转变。我们希望有一个高度灵活和可扩展的基础 ISA 来构建我们的研究工作。
+RISC-V 的开发始于我们对研究和教育的需求。我们小组特别注重将研究理念付诸实际硬件实现（自本规范第一版发布以来，我们已完成了十一种不同的 RISC-V 芯片设计与制造），并为学生提供实际的硬件设计，供他们在课堂上探索（RISC-V 处理器 RTL 设计已在伯克利的多个本科和研究生课程中使用）。在目前的研究中，我们特别关注传统晶体管缩放的终结带来的变化，尤其是向专业化和异构加速器的转变。我们希望通过一个高度灵活且可扩展的基础 ISA 来支持我们的研究工作。
 
-我们经常被问到的一个问题是“为什么开发新的 ISA？”使用现有商业 ISA 的最大明显好处是可以利用广泛支持的软件生态系统，包括开发工具和移植的应用程序，这可以在研究和教学中发挥作用。其他好处包括大量文档和教程示例的存在。然而，我们使用商业指令集进行研究和教学的经验表明，这些好处在实践中较小，并且不足以抵消其缺点：
+我们经常被问到一个问题：“为什么要开发新的 ISA？”采用现有商业 ISA 的最大优势是能够享受广泛的软件生态系统支持，包括各种开发工具和移植的应用程序，这对研究和教学具有重要意义。其他优点还包括大量现成的文档和教程。然而，我们的经验告诉我们，使用现有商业指令集的好处在实际应用中相对有限，且远不及其潜在缺点：
 
-* *商业 ISA 是专有的。* 除了 SPARC V8 是一个开放的 IEEE 标准 cite:[sparcieee1994] 外，大多数商业 ISA 的所有者都严格保护其知识产权，并不欢迎自由可用的竞争性实现。这对仅使用软件模拟器的学术研究和教学来说问题较小，但对希望共享实际 RTL 实现的小组来说是一个主要问题。对于不希望信任少数商业 ISA 实现来源但被禁止创建自己的洁净室实现的实体来说，这也是一个主要问题。我们不能保证所有 RISC-V 实现都不会侵犯第三方专利，但我们可以保证我们不会试图起诉 RISC-V 实现者。
-* *商业 ISA 仅在某些市场领域流行。* 在撰写本文时，最明显的例子是 ARM 架构在服务器领域支持不佳，而 Intel x86 架构（或几乎所有其他架构）在移动领域支持不佳，尽管 Intel 和 ARM 都试图进入对方的市场领域。另一个例子是 ARC 和 Tensilica，它们提供可扩展的内核，但专注于嵌入式领域。这种市场细分削弱了支持特定商业 ISA 的好处，因为在实践中，软件生态系统仅存在于某些领域，而必须为其他领域构建。
-* *商业 ISA 迭起兴衰。* 以前的研究基础设施是围绕不再流行（SPARC，MIPS）或甚至不再生产（Alpha）的商业 ISA 构建的。这些失去了活跃的软件生态系统的好处，并且围绕 ISA 和支持工具的知识产权问题干扰了相关第三方继续支持 ISA 的能力。一个开放的 ISA 也可能失去流行，但任何相关方都可以继续使用和开发生态系统。
-* *流行的商业 ISA 很复杂。* 主流商业 ISA（x86 和 ARM）在硬件中实现以支持常见软件堆栈和操作系统的程度上都非常复杂。更糟糕的是，几乎所有的复杂性都是由于糟糕或至少过时的 ISA 设计决策，而不是那些真正提高效率的功能。
-* *仅有商业 ISA 不足以启动应用程序。* 即使我们花费精力实现一个商业 ISA，这也不足以运行现有的该 ISA 应用程序。大多数应用程序需要完整的 ABI（应用程序二进制接口）才能运行，而不仅仅是用户级 ISA。大多数 ABI 依赖于库，而库又依赖于操作系统支持。要运行现有的操作系统，需要实现操作系统期望的监督级 ISA 和设备接口。这些通常比用户级 ISA 规定得少得多且实现起来复杂得多。
-* *流行的商业 ISA 不是为可扩展性设计的。* 主流商业 ISA 并不是特别为可扩展性设计的，因此随着指令集的增长，它们增加了相当大的指令编码复杂性。像 Tensilica（被 Cadence 收购）和 ARC（被 Synopsys 收购）这样的公司已经围绕可扩展性构建了 ISA 和工具链，但它们专注于嵌入式应用程序而不是通用计算系统。
-* *修改后的商业 ISA 是一个新的 ISA。* 我们的主要目标之一是支持架构研究，包括主要的 ISA 扩展。即使是小的扩展也会削弱使用标准 ISA 的好处，因为编译器必须修改，应用程序必须从源代码重新构建以使用扩展。引入新架构状态的较大扩展还需要对操作系统进行修改。最终，修改后的商业 ISA 成为一个新的 ISA，但带来了基础 ISA 的所有遗留问题。
+* *商业 ISA 是专有的。* 除了 SPARC V8 是一个开放的 IEEE 标准 cite:[sparcieee1994] 外，，绝大多数商业 ISA 的所有者都严格保护其知识产权，不欢迎自由开放的竞争性实现。对于仅依赖软件模拟器的学术研究和教学而言，这通常不是问题，但对于那些希望分享实际 RTL 实现的团队来说，存在较大障碍。对于不愿依赖少数商业 ISA 实现的机构，且被禁止自行创建净室实现的情况，这也是一个大问题。尽管我们不能保证所有 RISC-V 实现不会侵犯第三方专利，但我们可以保证不会试图起诉任何 RISC-V 实现者。
+* *商业 ISA 仅在某些市场领域流行。* 在撰写本文时，ARM 架构在服务器领域支持较差，而 Intel x86 架构（或几乎所有其他架构）在移动领域的支持则较弱，尽管这两家公司都在尝试进入对方的市场。另一个例子是 ARC 和 Tensilica，它们专注于嵌入式领域，并提供可扩展的内核。这种市场细分降低了商业 ISA 的优势，因为软件生态系统往往局限于某些领域，其他领域则需要重新开发支持。
+* *商业 ISA 迭起兴衰。* 以前，许多研究基础设施是围绕不再流行的商业 ISA（如 SPARC 和 MIPS）构建的，甚至一些已经停止生产（如 Alpha）。这些 ISA 失去了活跃的软件生态系统，并且由于知识产权问题，第三方无法继续为其提供支持。相比之下，开放的 ISA 即使失去流行，相关方仍然可以继续使用和发展其生态系统。
+* *流行的商业 ISA 很复杂。* 当前流行的商业 ISA（如 x86 和 ARM）在硬件实现上非常复杂，旨在支持常见的软件堆栈和操作系统。然而，这种复杂性大多源自早期糟糕的设计决策，而非真正提升效率的功能。
+* *仅有商业 ISA 不足以启动应用程序。* 即使我们投入了大量的精力来实现某一商业 ISA，它依然无法直接运行现有应用程序。大多数应用程序需要完整的 ABI（应用程序二进制接口），而不仅仅依赖于用户级 ISA。大部分 ABI 依赖于特定的库，而这些库又需要操作系统的支持。为了运行现有的操作系统，我们必须实现操作系统要求的监督级 ISA 和设备接口，这通常比用户级 ISA 更为复杂且实现起来更具挑战性。
+* *流行的商业 ISA 不是为可扩展性设计的。*  目前主流的商业 ISA 并未为可扩展性考虑。随着指令集的扩展，它们的指令编码变得越来越复杂。例如，Tensilica（现已被 Cadence 收购）和 ARC（现已被 Synopsys 收购）等公司已经围绕可扩展性设计了 ISA 和工具链，但它们更多专注于嵌入式应用，而非通用计算系统。
+* *修改后的商业 ISA 是一个新的 ISA。* 我们的主要目标之一是支持架构研究，特别是包括主要 ISA 扩展的研究。即使是较小的扩展，也会削弱使用标准 ISA 的优势，因为编译器必须进行修改，应用程序也需要从源代码重新编译以支持这些扩展。对于更大的架构扩展，还需要对操作系统进行调整。最终，修改后的商业 ISA 不再是原有的 ISA，而是变成了一个全新的 ISA，带来了基础 ISA 的所有遗留问题。
 
-我们的立场是，ISA 可能是计算系统中最重要的接口，没有理由认为这样一个重要的接口应该是专有的。主流商业 ISA 基于 30 多年前已经广为人知的指令集概念。软件开发人员应该能够针对开放标准硬件目标，商业处理器设计人员应该在实现质量上竞争。
+我们的立场是，ISA 是计算机系统中最为关键的接口，理应是开放的，而不应成为专有的。主流商业 ISA 基于三十多年前的指令集概念，软件开发者应当能够针对开放标准的硬件目标进行开发，商业处理器设计者则应在质量上展开竞争。
 
-我们远不是第一个考虑适合硬件实现的开放 ISA 设计的人。我们还考虑了其他现有的开放 ISA 设计，其中最接近我们目标的是 OpenRISC 架构 cite:[openriscarch]。由于几个技术原因，我们决定不采用 OpenRISC ISA：
+我们并非唯一考虑开放 ISA 设计的团队。在评估过其他开放 ISA 设计后，最接近我们目标的是 OpenRISC 架构 cite:[openriscarch]。但由于以下技术原因，我们决定不采用 OpenRISC ISA：
 
-* OpenRISC 有条件码和分支延迟槽，这使得高性能实现变得复杂。
-* OpenRISC 使用固定的 32 位编码和 16 位立即数，这排除了更密集的指令编码并限制了 ISA 后续扩展的空间。
+* OpenRISC 使用条件码和分支延迟槽，增加了高性能实现的复杂度。
+* OpenRISC 使用固定的 32 位编码和 16 位立即数，限制了指令编码密度，并影响了未来的扩展空间。
 * OpenRISC 不支持 2008 年修订的 IEEE 754 浮点标准。
-* 当我们开始时，OpenRISC 64 位设计尚未完成。
+* 在我们开始设计 RISC-V 时，OpenRISC 64 位设计尚未完成。
 
-从头开始设计，我们可以设计一个满足我们所有目标的 ISA，尽管当然，这比我们最初计划的要花费更多的精力。我们现在已经投入了大量精力来建立 RISC-V ISA 基础设施，包括文档、编译器工具链、操作系统移植、参考 ISA 模拟器、FPGA 实现、高效 ASIC 实现、架构测试套件和教学材料。自本手册的最后一版以来，RISC-V ISA 在学术界和工业界得到了广泛应用，我们创建了非营利性 RISC-V 基金会来保护和推广该标准。RISC-V 基金会网站 https://riscv.org 包含有关基金会成员和使用 RISC-V 的各种开源项目的最新信息。
+因此，我们决定从头开始设计一个新的 ISA，以满足我们的所有目标，尽管这一过程花费了比原计划更多的精力。目前，我们已经投入了大量资源建设 RISC-V ISA 的基础设施，包括文档、编译器工具链、操作系统移植、模拟器、FPGA 实现、高效的 ASIC 实现、架构测试套件和教学材料。自本手册上一版发布以来，RISC-V 已在学术界和工业界得到广泛应用，并且我们成立了非营利性 RISC-V 基金会，以保护并推广这一标准。RISC-V 基金会网站 https://riscv.org 包含有关基金会成员和使用 RISC-V 的各种开源项目的最新信息。
 
 === ISA 手册 1.0 版的历史
 
-RISC-V ISA 和指令集手册建立在几个早期项目的基础上。监督级机器的几个方面和手册的整体格式可以追溯到 1992 年在 UC Berkeley 和 ICSI 开始的 T0（Torrent-0）矢量微处理器项目。T0 是基于 MIPS-II ISA 的矢量处理器，Krste Asanović 是主要架构师和 RTL 设计师，Brian Kingsbury 和 Bertrand Irrisou 是主要的 VLSI 实现者。ICSI 的 David Johnson 是 T0 ISA 设计的主要贡献者，特别是监督模式，以及手册文本。John Hauser 也对 T0 ISA 设计提供了大量反馈。
+RISC-V ISA 和指令集手册的形成源于多个早期项目的积累。手册的整体结构以及监督级机器的一些特点可以追溯到1992年开始的 T0（Torrent-0）矢量微处理器项目，该项目由加州大学伯克利分校（UC Berkeley）和国际计算机科学研究所（ICSI）共同推进。T0 基于 MIPS-II ISA，Krste Asanović 担任主要架构师和 RTL 设计师，Brian Kingsbury 和 Bertrand Irrisou 负责 VLSI 实现。ICSI 的 David Johnson 对 T0 ISA 的设计贡献巨大，特别是在监督模式设计和手册文本方面，John Hauser 也提供了大量宝贵反馈。
 
-2000 年在 MIT 开始的 Scale（低能耗软件控制架构）项目建立在 T0 项目基础设施之上，改进了监督级接口，并通过取消分支延迟槽远离 MIPS 标量 ISA。Ronny Krashinsky 和 Christopher Batten 是 MIT Scale 矢量线程处理器的主要架构师，而 Mark Hampton 将基于 GCC 的编译器基础设施和工具移植到 Scale。
+2000 年，MIT 启动了 Scale（低能耗软件控制架构）项目，该项目在 T0 项目基础上进行扩展，改进了监督级接口，并通过移除分支延迟槽摆脱了 MIPS 标量 ISA 的局限。MIT Scale 矢量线程处理器的主要架构师为 Ronny Krashinsky 和 Christopher Batten，而 Mark Hampton 负责将基于 GCC 的编译器基础设施和工具移植到 Scale。
 
-T0 MIPS 标量处理器规范（MIPS-6371）的一个轻微编辑版本在 2002 年秋季学期的新版本 MIT 6.371 VLSI 系统导论课程中用于教学，Chris Terman 和 Krste Asanović 是讲师。Chris Terman 为课程贡献了大部分实验材料（没有助教！）。6.371 课程演变为 2005 年春季由 Arvind 和 Krste Asanović 教授的试验课程 6.884 复杂数字设计课程，并成为常规春季课程 6.375。一个基于 Scale MIPS 的标量 ISA 的简化版本，名为 SMIPS，在 6.884/6.375 中使用。Christopher Batten 是这些课程的早期助教，并围绕 SMIPS ISA 开发了大量文档和实验材料。助教 Yunsup Lee 将这些 SMIPS 实验材料适应并增强，用于 2009 年秋季由 John Wawrzynek、Krste Asanović 和 John Lazzaro 教授的 UC Berkeley CS250 VLSI 系统设计课程。
+T0 MIPS 标量处理器规范（MIPS-6371）经过小幅编辑后，于 2002 年秋季学期的 MIT 6.371 VLSI 系统导论课程中用于教学，Chris Terman 和 Krste Asanović 担任讲师。Chris Terman 为该课程贡献了大部分实验材料（无助教！）。课程随后演变为 2005 年春季由 Arvind 和 Krste Asanović 教授的试验课程 6.884 复杂数字设计，并最终成为常规的春季课程 6.375。6.884/6.375 课程中使用了一个基于 Scale MIPS 的简化标量 ISA，名为 SMIPS。Christopher Batten 是这些课程的早期助教，并开发了大量关于 SMIPS ISA 的文档和实验材料。助教 Yunsup Lee 在 2009 年秋季将这些材料进行了适应和增强，并应用于 UC Berkeley CS250 VLSI 系统设计课程，由 John Wawrzynek、Krste Asanović 和 John Lazzaro 教授。
 
-Maven（可塑矢量线程引擎阵列）项目是第二代矢量线程架构。其设计由 Christopher Batten 在 2007 年夏季作为 UC Berkeley 的交换学者时领导。来自日立的访问工业研究员 Hidetaka Aoki 对早期 Maven ISA 和微架构设计提供了大量反馈。Maven 基础设施基于 Scale 基础设施，但 Maven ISA 进一步远离 Scale 中定义的 MIPS ISA 变体，具有统一的浮点和整数寄存器文件。Maven 旨在支持替代数据并行加速器的实验。Yunsup Lee 是各种 Maven 矢量单元的主要实现者，而 Rimas Avižienis 是各种 Maven 标量单元的主要实现者。Yunsup Lee 和 Christopher Batten 将 GCC 移植到新的 Maven ISA。Christopher Celio 提供了 Maven 的传统矢量指令集（“Flood”）变体的初始定义。
+Maven（可塑矢量线程引擎阵列）项目是第二代矢量线程架构，设计由 Christopher Batten 于 2007 年夏季作为 UC Berkeley 交换学者时主导。日立的工业研究员 Hidetaka Aoki 为早期 Maven ISA 和微架构设计提供了宝贵反馈。Maven 基础设施基于 Scale，但与 Scale 中定义的 MIPS ISA 变体相比，Maven ISA 采用了统一的浮点和整数寄存器文件，进一步改进了设计。Maven 旨在支持替代数据并行加速器的实验。Yunsup Lee 主要负责 Maven 矢量单元的实现，而 Rimas Avižienis 则负责标量单元的实现。Yunsup Lee 和 Christopher Batten 将 GCC 移植到 Maven 的新 ISA。Christopher Celio 提供了 Maven 传统矢量指令集（“Flood”）变体的初始定义。
 
-基于所有这些先前项目的经验，RISC-V ISA 定义于 2010 年夏季开始，主要设计者是 Andrew Waterman、Yunsup Lee、Krste Asanović 和 David Patterson。RISC-V 32 位指令子集的初始版本在 2010 年秋季的 UC Berkeley CS250 VLSI 系统设计课程中使用，Yunsup Lee 是助教。RISC-V 是对早期 MIPS 启发设计的彻底突破。John Hauser 对浮点 ISA 定义做出了贡献，包括符号注入指令和允许浮点值内部重新编码的寄存器编码方案。
+基于这些先前项目的经验，RISC-V ISA 于 2010 年夏季开始定义，设计团队包括 Andrew Waterman、Yunsup Lee、Krste Asanović 和 David Patterson。RISC-V 32 位指令子集的初版在 2010 年秋季的 UC Berkeley CS250 VLSI 系统设计课程中首次使用，Yunsup Lee 担任助教。RISC-V 是对早期 MIPS 启发设计的一个重要突破。John Hauser 为浮点 ISA 的定义作出了贡献，特别是在符号注入指令和浮点值内部重新编码的寄存器编码方案方面。
 
 === ISA 手册 2.0 版的历史
 
-已经完成了多个 RISC-V 处理器的实现，包括几次硅片制造，如 <<silicon, 制造的 RISC-V 测试芯片表>> 所示。
+我们已经完成了多个 RISC-V 处理器的实现，并进行了多次硅片制造，具体信息请参见 <<silicon, 制造的 RISC-V 测试芯片表>>。
 
 [[silicon]]
 [%autowidth,float="center",align="center",cols="^,^,^,^",options="header",]
@@ -56,35 +56,35 @@ Maven（可塑矢量线程引擎阵列）项目是第二代矢量线程架构。
 |EOS22 |2014 年 3 月 7 日 |IBM 45nm SOI |RV64G1p9999_Xhwacha3
 |===
 
-首批制造的 RISC-V 处理器是用 Verilog 编写的，并于 2011 年在 ST 的预生产 FDSOI 技术中制造为 Raven-1 测试芯片。由 Yunsup Lee 和 Andrew Waterman 开发了两个内核，在 Krste Asanović 的指导下共同制造：1）一个具有错误检测触发器的 RV64 标量内核，2）一个附带 64 位浮点矢量单元的 RV64 内核。第一个微架构非正式地称为“TrainWreck”，因为完成设计的时间很短且设计库不成熟。
+首批 RISC-V 处理器使用 Verilog 编写，并于 2011 年在 ST 的 FDSOI 技术中制造为 Raven-1 测试芯片。由 Yunsup Lee 和 Andrew Waterman 开发了两个内核，在 Krste Asanović 的指导下完成：1）一个带有错误检测触发器的 RV64 标量内核，2）一个带 64 位浮点矢量单元的 RV64 内核。第一个微架构因设计周期紧张、库不成熟，非正式地称为“TrainWreck”。
 
-随后，Andrew Waterman、Rimas Avižienis 和 Yunsup Lee 在 Krste Asanović 的指导下开发了一个干净的顺序解耦 RV64 内核微架构，并继续铁路主题，代号为“Rocket”，以纪念 George Stephenson 成功的蒸汽机车设计。Rocket 是用 Chisel 编写的，这是一种在 UC Berkeley 开发的新硬件设计语言。Rocket 中使用的 IEEE 浮点单元由 John Hauser、Andrew Waterman 和 Brian Richards 开发。Rocket 之后得到了进一步的改进和发展，并在 FDSOI 中制造了两次（Raven-2，Raven-3），在 IBM SOI 技术中制造了五次（EOS14，EOS16，EOS18，EOS20，EOS22）用于光子学项目。正在进行的工作是使 Rocket 设计作为参数化 RISC-V 处理器生成器可用。
+随后，Andrew Waterman、Rimas Avižienis 和 Yunsup Lee 在 Krste Asanović 的指导下开发了一个清晰的顺序解耦 RV64 内核微架构，继续使用铁路主题，代号“Rocket”，以纪念 George Stephenson 的蒸汽机车设计。Rocket 使用 UC Berkeley 开发的硬件设计语言 Chisel 编写。Rocket 中的 IEEE 浮点单元由 John Hauser、Andrew Waterman 和 Brian Richards 开发。此后，Rocket 进行了多次改进，并在 FDSOI 技术中制造了两次（Raven-2，Raven-3），在 IBM SOI 技术中制造了五次（EOS14，EOS16，EOS18，EOS20，EOS22）用于光子学项目。当前正在开展的工作是将 Rocket 设计转变为一个参数化的 RISC-V 处理器生成器。
 
-EOS14-EOS22 芯片包括早期版本的 Hwacha，一个 64 位 IEEE 浮点矢量单元，由 Yunsup Lee、Andrew Waterman、Huy Vo、Albert Ou、Quan Nguyen 和 Stephen Twigg 开发，Krste Asanović 指导。EOS16-EOS22 芯片包括由 Henry Cook 和 Andrew Waterman 开发的双核缓存一致性协议，Krste Asanović 指导。EOS14 硅片已成功运行在 1.25 GHz。EOS16 硅片由于 IBM 垫库中的一个错误而受影响。EOS18 和 EOS20 已成功运行在 1.35 GHz。
+EOS14-EOS22 芯片包括早期版本的 Hwacha，这是一个 64 位 IEEE 浮点矢量单元，由 Yunsup Lee、Andrew Waterman、Huy Vo、Albert Ou、Quan Nguyen 和 Stephen Twigg 开发，Krste Asanović 指导。EOS16-EOS22 芯片还包括 Henry Cook 和 Andrew Waterman 开发的双核缓存一致性协议，Krste Asanović 指导。EOS14 芯片成功在 1.25 GHz 下运行，但 EOS16 芯片受 IBM 垫库中的一个错误影响。EOS18 和 EOS20 芯片在 1.35 GHz 下成功运行。
 
-Raven 测试芯片的贡献者包括 Yunsup Lee、Andrew Waterman、Rimas Avižienis、Brian Zimmer、Jaehwa Kwak、Ruzica Jevtić、Milovan Blagojević、Alberto Puggelli、Steven Bailey、Ben Keller、Pi-Feng Chiu、Brian Richards、Borivoje Nikolić 和 Krste Asanović。
+Raven 测试芯片的贡献者有 Yunsup Lee、Andrew Waterman、Rimas Avižienis、Brian Zimmer、Jaehwa Kwak、Ruzica Jevtić、Milovan Blagojević、Alberto Puggelli、Steven Bailey、Ben Keller、Pi-Feng Chiu、Brian Richards、Borivoje Nikolić 和 Krste Asanović。
 
-EOS 测试芯片的贡献者包括 Yunsup Lee、Rimas Avižienis、Andrew Waterman、Henry Cook、Huy Vo、Daiwei Li、Chen Sun、Albert Ou、Quan Nguyen、Stephen Twigg、Vladimir Stojanović 和 Krste Asanović。
+EOS 测试芯片的贡献者有 Yunsup Lee、Rimas Avižienis、Andrew Waterman、Henry Cook、Huy Vo、Daiwei Li、Chen Sun、Albert Ou、Quan Nguyen、Stephen Twigg、Vladimir Stojanović 和 Krste Asanović。
 
-Andrew Waterman 和 Yunsup Lee 开发了 C++ ISA 模拟器“Spike”，作为开发中的黄金模型，并以庆祝美国跨大陆铁路完工的金钉命名。Spike 已作为 BSD 开源项目提供。
+Andrew Waterman 和 Yunsup Lee 开发了 C++ ISA 模拟器“Spike”，它作为开发中的黄金模型，并以庆祝美国跨大陆铁路完工的金钉命名。Spike 已作为 BSD 开源项目发布。
 
 Andrew Waterman 完成了一篇硕士论文，初步设计了 RISC-V 压缩指令集 cite:[waterman-ms]。
 
-已经完成了多个 RISC-V 的 FPGA 实现，主要作为 Par Lab 项目研究静修会的集成演示的一部分。最大的 FPGA 设计有 3 个缓存一致的 RV64IMA 处理器运行研究操作系统。FPGA 实现的贡献者包括 Andrew Waterman、Yunsup Lee、Rimas Avižienis 和 Krste Asanović。
+多个 RISC-V FPGA 实现已经完成，主要作为 Par Lab 项目研究静修会的集成演示的一部分。最大的 FPGA 设计由 3 个缓存一致的 RV64IMA 处理器组成，运行研究操作系统。FPGA 实现的贡献者包括 Andrew Waterman、Yunsup Lee、Rimas Avižienis 和 Krste Asanović。
 
-RISC-V 处理器已在 UC Berkeley 的多个课程中使用。Rocket 在 2011 年秋季的 CS250 课程中用作课程项目的基础，Brian Zimmer 是助教。在 2012 年春季的本科 CS152 课程中，Christopher Celio 使用 Chisel 编写了一套教育 RV32 处理器，名为“Sodor”，以“托马斯和朋友们”所在的岛屿命名。该套件包括一个微码内核、一个未流水线内核和 2、3 和 5 级流水线内核，并以 BSD 许可证公开提供。该套件随后进行了更新，并在 2013 年春季的 CS152 课程中再次使用，Yunsup Lee 是助教，2014 年春季的 CS152 课程中，Eric Love 是助教。Christopher Celio 还开发了一个称为 BOOM（Berkeley Out-of-Order Machine）的乱序 RV64 设计，并提供了伴随的流水线可视化，用于 CS152 课程。CS152 课程还使用了由 Andrew Waterman 和 Henry Cook 开发的缓存一致版本的 Rocket 内核。
+RISC-V 处理器广泛应用于 UC Berkeley 的多个课程。Rocket 作为 2011 年秋季 CS250 课程的项目基础，Brian Zimmer 担任助教。在 2012 年春季的本科 CS152 课程中，Christopher Celio 使用 Chisel 编写了一个名为“Sodor”的教育版 RV32 处理器，取名自“托马斯和朋友们”中的岛屿。该套件包含微码内核、未流水线内核以及 2、3 和 5 级流水线内核，并以 BSD 许可证公开。随后，Christopher Celio 更新了该套件，并于 2013 年春季和 2014 年春季继续用于 CS152 课程，分别由 Yunsup Lee 和 Eric Love 担任助教。Christopher Celio 还开发了名为 BOOM（Berkeley Out-of-Order Machine）的乱序 RV64 设计，并为该设计提供了流水线可视化工具，用于 CS152 课程。CS152 课程还使用了由 Andrew Waterman 和 Henry Cook 开发的缓存一致版本的 Rocket 内核。
 
-在 2013 年夏季，定义了 RoCC（Rocket Custom Coprocessor）接口，以简化向 Rocket 内核添加自定义加速器。Rocket 和 RoCC 接口在 2013 年秋季的 CS250 VLSI 课程中广泛使用，Jonathan Bachrach 教授，多个学生加速器项目基于 RoCC 接口构建。Hwacha 矢量单元已重新编写为 RoCC 协处理器。
+2013 年夏季，RoCC（Rocket Custom Coprocessor）接口被定义，用于简化 Rocket 内核中自定义加速器的集成。Rocket 和 RoCC 接口在 2013 年秋季的 CS250 VLSI 课程中广泛使用，多个学生加速器项目基于 RoCC 接口构建。Hwacha 矢量单元被重构为 RoCC 协处理器。
 
-两名伯克利本科生 Quan Nguyen 和 Albert Ou 在 2013 年春季成功将 Linux 移植到 RISC-V 上运行。
+两名伯克利本科生 Quan Nguyen 和 Albert Ou 在 2013 年春季成功将 Linux 移植到 RISC-V。
 
-Colin Schmidt 在 2014 年 1 月成功完成了 RISC-V 2.0 的 LLVM 后端。
+2014 年 1 月，Colin Schmidt 完成了 RISC-V 2.0 的 LLVM 后端。
 
-Bluespec 的 Darius Rad 在 2014 年 3 月为 GCC 移植贡献了软浮点 ABI 支持。
+2014 年 3 月，Bluespec 的 Darius Rad 为 GCC 移植贡献了软浮点 ABI 支持。
 
-John Hauser 贡献了浮点分类指令的定义。
+John Hauser 对浮点分类指令的定义做出了贡献。
 
-我们知道还有几个 RISC-V 内核实现，包括 Tommy Thorn 的一个 Verilog 实现和 Rishiyur Nikhil 的一个 Bluespec 实现。
+此外，Tommy Thorn 和 Rishiyur Nikhil 分别提供了基于 Verilog 和 Bluespec 的 RISC-V 内核实现。
 
 === 致谢
 
@@ -92,7 +92,7 @@ John Hauser 贡献了浮点分类指令的定义。
 
 === ISA 手册 2.1 版的历史
 
-自 2014 年 5 月推出冻结版 2.0 以来，RISC-V ISA 的采用速度非常快，活动太多，无法在这样一个简短的历史部分中记录。也许最重要的单一事件是 2015 年 8 月成立了非营利性 RISC-V 基金会。基金会现在将接管官方 RISC-V ISA 标准的管理，官方网站 `riscv.org` 是获取 RISC-V 标准新闻和更新的最佳地方。
+自 2014 年 5 月发布冻结版 2.0 以来，RISC-V ISA 的采用速度急剧上升，发展迅速，诸多事件使得这一短暂历史难以全面叙述。或许最为关键的一步是，2015 年 8 月成立了非营利性的 RISC-V 基金会。该基金会现已接管了 RISC-V ISA 标准的官方管理，riscv.org 网站成为获取相关新闻和更新的主要渠道。
 
 === 致谢
 
@@ -120,4 +120,4 @@ RISC-V 架构和实现的开发部分由以下赞助商资助。
 * *Project Isis:* DoE 奖项 DE-SC0003624。
 * *ASPIRE Lab:* DARPA PERFECT 计划，奖项 HR0011-12-2-0016。DARPA POEM 计划奖项 HR0011-11-C-0100。未来架构研究中心（C-FAR），由半导体研究公司资助的 STARnet 中心。额外支持来自 ASPIRE 工业赞助商 Intel 和 ASPIRE 合作伙伴 Google、Hewlett Packard Enterprise、Huawei、Nokia、NVIDIA、Oracle 和 Samsung。
 
-本文内容不一定反映美国政府的立场或政策，不应推断出任何官方认可。
+本文所述内容并不代表美国政府的立场或政策，亦不可推断为官方的任何形式的认可。

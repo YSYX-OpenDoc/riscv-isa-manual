@@ -10,19 +10,18 @@
 ]}
 ....
 
-NOTE: This diagram shows the layout for RV32 systems, whereas in
-general `vill` should be at bit XLEN-1.
+NOTE: 这张图显示了 RV32 系统的布局，而通常情况下，`vill` 应该位于 XLEN-1 位。
 
-.`vtype` register layout
+.`vtype` 寄存器布局
 [cols=">2,4,10"]
 [%autowidth,float="center",align="center",options="header"]
 |===
-|     Bits | Name       | Description
+|     位 | 名称       | 描述
 
-|   XLEN-1 | vill       | Illegal value if set
-| XLEN-2:8 | 0          | Reserved if non-zero
-|        7 | vma        | Vector mask agnostic
-|        6 | vta        | Vector tail agnostic
-|      5:3 | vsew[2:0]  | Selected element width (SEW) setting
-|      2:0 | vlmul[2:0] | Vector register group multiplier (LMUL) setting
+|   XLEN-1 | vill       | 如果设置则为非法值
+| XLEN-2:8 | 0          | 如果非零则为保留位
+|        7 | vma        | 向量掩码无关
+|        6 | vta        | 向量尾部无关
+|      5:3 | vsew[2:0]  | 选择的元素宽度（SEW）设置
+|      2:0 | vlmul[2:0] | 向量寄存器组倍数（LMUL）设置
 |===

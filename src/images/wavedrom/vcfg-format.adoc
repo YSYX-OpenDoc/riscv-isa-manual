@@ -1,4 +1,4 @@
-Formats for Vector Configuration Instructions under OP-V major opcode
+OP-V 主操作码下的向量配置指令格式
 
 ////
  31 30         25 24      20 19      15 14   12 11      7 6     0

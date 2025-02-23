@@ -1,4 +1,4 @@
-Format for Vector Load Instructions under LOAD-FP major opcode
+LOAD-FP 主操作码下的向量加载指令格式
 
 ////
 31 29  28  27 26  25  24      20 19       15 14   12 11      7 6     0
@@ -52,7 +52,7 @@ Format for Vector Load Instructions under LOAD-FP major opcode
   {bits: 3, name: 'nf'},
 ]}
 ....
-Format for Vector Store Instructions under STORE-FP major opcode
+STORE-FP 主操作码下的向量存储指令格式
 
 ////
 31 29  28  27 26  25  24      20 19       15 14   12 11      7 6     0

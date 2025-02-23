@@ -3,7 +3,6 @@
     .global strlen
 # size_t strlen(const char *str)
 # a0 保存 *str
-
 strlen:
     mv a3, a0             # 保存起始地址
 loop:
@@ -20,3 +19,4 @@ loop:
     sub a0, a3, a0        # 减去起始地址 + 增量
 
     ret
+    
