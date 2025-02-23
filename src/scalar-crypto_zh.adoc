@@ -343,6 +343,8 @@ NOTE: <<insns-aes64ks1i,`aes64ks1i`>> 和 <<insns-aes64ks2,`aes64ks2`>> 指令�
 
 // ------------------------------------------------------------
 
+<<<
+
 [[crypto_scalar_insns, reftext="标量密码学指令"]]
 === 指令
 
@@ -3404,7 +3406,7 @@ VS 和 VU 模式存在于实现了 Hypervisor（H）扩展的系统中。如果�
 实现可以实现 `mseccfg`，使得 `[s,u]seed` 是只读常量值 `0`。软件可以通过将 `1` 写入 `[s,u]seed` 并读取结果来发现是否可以在 U 和 S 模式下启用对 `seed` CSR 的访问。
 
 如果未实现 S 或 U 模式，则 `mseccfg` 的相应 `[s,u]seed` 位必须硬连线为零。
-`[s,u]seed` 位必须具有定义的复位值。系统不得允许它们在复位后处于未定义状态。
+`[s,u]seed` 位必须具有定义的复位值。系统不得允许它们在复位后处于 UNSPECIFIED 状态。
 如果实现了 `Zkr`，则存在 `mseccfg`，或者如果其他处理器功能需要它。如果未实现 `Zkr`，则 `[s,u]seed` 位必须硬连线为零。
 
 [[crypto_scalar_zkt]]
