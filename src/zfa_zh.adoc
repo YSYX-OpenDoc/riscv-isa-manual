@@ -1,5 +1,5 @@
 [[zfa]]
-== “Zfa” 扩展：额外浮点指令, 版本 1.0
+== “Zfa”扩展：额外浮点指令，版本 1.0
 
 本章描述了 Zfa 标准扩展，该扩展增加了立即数加载指令、IEEE 754-2019 最小值和最大值操作、舍入到整数操作（round-to-integer operations）以及静默浮点数比较指令（quiet floating-point comparisonsS）。对于 RV32D，Zfa 扩展还增加了将双精度浮点值与整数寄存器之间传输的指令；对于 RV64Q，则增加了类似的指令，用于四精度浮点值。Zfa 扩展依赖于 F 扩展。
 

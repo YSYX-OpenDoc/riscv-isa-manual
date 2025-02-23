@@ -1,7 +1,7 @@
 [[atomics]]
-== “A” 扩展：原子指令，版本 2.1
+== “A”扩展：原子指令，版本 2.1
 
-“A” 扩展，即原子指令扩展，包含了原子性地读-改-写内存的指令，以支持在同一内存空间中运行的多个 RISC-V 硬件线程之间的同步。提供的两种原子指令形式是加载保留/存储条件指令和原子取值并操作内存指令。这两种类型的原子指令支持多种内存一致性排序，包括无序、获取、释放和顺序一致语义。这些指令使 RISC-V 能够支持 RCsc 内存一致性模型。cite:[Gharachorloo90memoryconsistency]
+“A”扩展，即原子指令扩展，包含了原子性地读-改-写内存的指令，以支持在同一内存空间中运行的多个 RISC-V 硬件线程之间的同步。提供的两种原子指令形式是加载保留/存储条件指令和原子取值并操作内存指令。这两种类型的原子指令支持多种内存一致性排序，包括无序、获取、释放和顺序一致语义。这些指令使 RISC-V 能够支持 RCsc 内存一致性模型。cite:[Gharachorloo90memoryconsistency]
 
 [NOTE]
 ====
@@ -19,7 +19,7 @@ A 扩展包括 Zaamo 扩展和 Zalrsc 扩展所提供的指令。
 如果两个位都未设置，则不会对原子内存操作施加额外的顺序约束。如果仅设置了 _aq_ 位，则原子内存操作被视为获取（acquire）访问，即在此 RISC-V 硬件线程上，任何后续内存操作都不能被观察到发生在获取内存操作之前。如果仅设置了 _rl_ 位，则原子内存操作被视为释放（release）访问，即释放内存操作不能被观察到发生在此 RISC-V 硬件线程上的任何先前内存操作之前。如果同时设置了 _aq_ 和 _rl_ 位，则原子内存操作是顺序一致（sequentially consistent）的，并且不能被观察到发生在任何先前内存操作之前或任何后续内存操作之后，且作用于相同地址域的内存操作。
 
 [[sec:lrsc]]
-=== “Zalrsc” 扩展：用于 Load-Reserved/Store-Conditional 指令
+=== “Zalrsc”扩展：用于 Load-Reserved/Store-Conditional 指令
 
 include::images/wavedrom/load-reserve-st-conditional.adoc[]
 
@@ -155,7 +155,7 @@ CAS 的一个优势是，它保证某个硬件线程最终会取得进展，而 
 ====
 
 [[sec:amo]]
-=== “Zaamo” 扩展：原子内存操作
+=== “Zaamo”扩展：原子内存操作
 
 include::images/wavedrom/atomic-mem.adoc[]
 
