@@ -16,7 +16,7 @@ NOTE: 这张图显示了 RV32 系统的布局，而通常情况下，`vill` 应�
 [cols=">2,4,10"]
 [%autowidth,float="center",align="center",options="header"]
 |===
-|     Bits | Name       | Description
+|     位 | 名称       | 描述
 
 |   XLEN-1 | vill       | 如果设置则为非法值
 | XLEN-2:8 | 0          | 如果非零则为保留位

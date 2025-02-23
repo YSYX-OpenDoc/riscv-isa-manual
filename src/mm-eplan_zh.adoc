@@ -272,7 +272,7 @@ RISC-V 包含两种类型的原子操作：AMO 和 LR/SC 对。这两者在概�
 |
 [%autowidth,cols="^,<,^,<",options="header",float="center",align="center"]
 !===
-2+!硬件线程 0 2+^!硬件线程 1
+2+!Hart 0 2+^!Hart 1
 !!li t1, 1 !!li t2, 2
 >!(a) !sw t1,0(s0) >!(d) !lw a0,0(s1)
 >!(b) !fence w, w >!(e) !sw t2,0(s1)
@@ -543,7 +543,7 @@ a! image::graphviz/litmus_lb_lrsc.png[]
 |
 [%autowidth,float="center",align="center",cols="^,<,^,<",options="header",]
 !===
-2+!硬件线程 0 2+! 硬件线程 1
+2+!Hart 0 2+! Hart 1
 ! !li t1, 1 !(d) !lw a0, 0(s1)
 !(a) !sw t1,0(s0) !(e) !sw a0, 0(s2)
 !(b) !fence w, w !(f) !lw a1, 0(s2)
@@ -597,7 +597,7 @@ a! image::graphviz/litmus_datacoirfi.png[]
 |
 [%autowidth,cols="^,<,^,<"float="center",align="center",options="header"]
 !===
-2+!硬件线程 0 2+^!硬件线程 1
+2+!Hart 0 2+^!Hart 1
 2+! 2+^!li t1, 1
 !(a) !lw a0,0(s0) !(d) !lw a1, 0(s1)
 !(b) !fence rw,rw !(e) !lw a2, 0(a1)
