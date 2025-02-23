@@ -283,15 +283,15 @@ include::images/wavedrom/ct-unconditional-2.adoc[]
 |===
 |_rd_ 为 _x1/x5_ |_rs1_ 为 _x1/x5_ |_rd_=_rs1_ |RAS 操作
 
-|否 |否 |-- |无
+|No |No |-- |无（None）
 
-|否 |是 |-- |弹出
+|No |No |-- |弹出（Pop）
 
-|是 |否 |-- |压入
+|Yes |No |-- |压入（Push）
 
-|是 |是 |是 |弹出后压入
+|Yes |Yes |Yes |弹出后压入（Pop, then push）
 
-|是 |是 |是 |压入
+|Yes |Yes |Yes |压入（Push）
 |===
 
 
