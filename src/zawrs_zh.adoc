@@ -46,7 +46,7 @@ WRS.NTO 和 WRS.STO 指令遵循 WFI 指令的规则，当有挂起的中断时�
 
 当 mstatus 中的 TW （超时等待）位为 1 ，而 WRS.NTO 正在 M 模式以外的任何特权模式下执行，并且在实现所特别规定的有界时间限制内未完成，WRS.NTO 指令将导致非法指令异常。
 
-在 VS 或 VU 模式下执行时，如果 hstatus 寄存器中的 VTW 位被设置， mstatus 寄存器中的 TW 位值为 0 ，且 WRS.NTO 在实现特定的有界时间限制内未完成，WRS.NTO 指令将导致虚拟指令异常。
+在 VS 或 VU 模式下执行时，如果 hstatus 寄存器中的 VTW 位被设置，mstatus 寄存器中的 TW 位值为 0 ，且 WRS.NTO 在实现特定的有界时间限制内未完成，WRS.NTO 指令将导致虚拟指令异常。
 
 [NOTE]
 ====

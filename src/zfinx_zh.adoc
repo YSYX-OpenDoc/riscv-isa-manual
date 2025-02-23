@@ -52,7 +52,7 @@ Zdinx 扩展添加了 D 扩展添加的所有指令，除了传输指令 FLD、F
 
 [NOTE]
 ====
-扩展规范中未提供成对加载/存储指令。因此，在 RV32Zdinx 扩展中，从内存加载或向内存存储双精度操作数，需要执行两次独立的加载或存储操作。 然而，寄存器之间的数据移动仅需一条 FSGNJ.D 指令即可完成。
+扩展规范中未提供成对加载/存储指令。因此，在 RV32Zdinx 扩展中，从内存加载或向内存存储双精度操作数，需要执行两次独立的加载或存储操作。然而，寄存器之间的数据移动仅需一条 FSGNJ.D 指令即可完成。
 ====
 === Zhinx
 
@@ -66,7 +66,7 @@ Zfh 扩展指令的 Zhinx 版本，在指令语义上与 Zfh 扩展保持一致�
 
 Zhinxmin 扩展旨在为在 `x` 寄存器上进行的 16 位半精度浮点运算提供最基本的支持。Zhinxmin 扩展依赖于 Zfinx 扩展。
 
-Zhinxmin 扩展仅包含 Zhinx 扩展中的 FCVT.S.H 和 FCVT.H.S 指令。 如果系统中同时存在 Zdinx 扩展，则 Zhinxmin 扩展还会额外包含 FCVT.D.H 和 FCVT.H.D 指令。
+Zhinxmin 扩展仅包含 Zhinx 扩展中的 FCVT.S.H 和 FCVT.H.S 指令。如果系统中同时存在 Zdinx 扩展，则 Zhinxmin 扩展还会额外包含 FCVT.D.H 和 FCVT.H.D 指令。
 [NOTE]
 ====
 未来，可以参照 RV32Zdinx 扩展的模式，定义 RV64Zqinx 四精度扩展。此外，亦可考虑定义 RV32Zqinx 扩展，但这将需要采用四倍字寄存器组合来存储四精度浮点数。
