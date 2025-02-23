@@ -30,3 +30,8 @@ Alternative build methods, such as local builds and GitHub Action builds, are al
 <!-- ## Repo Activity
 
 ![Alt](https://repobeats.axiom.co/api/embed/ccec87dc4502f2ed7c216b670b5ed8efc33a1d4c.svg "Repobeats analytics image") -->
+
+## Building the Docs
+```
+make docker
+```
