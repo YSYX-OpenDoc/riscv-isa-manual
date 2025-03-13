@@ -42,4 +42,3 @@ jobs:
       with:
         name: unpriv-isa-asciidoc.pdf
         path: ${{ github.workspace }}/build/unpriv-isa-asciidoc.pdf
-        retention-days: 7
