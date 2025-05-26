@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 只在打 tag 时触发，如 v20211203-zh-v1.0
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Pull build container
+        run: docker pull ghcr.io/ysyx-opendoc/asciidoctor:latest
+
+      - name: Build PDF
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/build ghcr.io/ysyx-opendoc/asciidoctor:latest \
+          /bin/sh -c 'cd ./build/build && make'
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/unpriv-isa-asciidoc.pdf
+          name: "RISC-V 非特权级手册中文翻译"
+          tag_name: ${{ github.ref_name }}
+          body: |
+            📘 本版本为 RISC-V 非特权级 ISA 手册（v20240411）的中文翻译。
+            👉 如有问题欢迎提交 issue。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
