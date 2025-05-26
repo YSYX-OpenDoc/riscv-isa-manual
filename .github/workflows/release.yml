@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'  # 只在打 tag 时触发，如 v20211203-zh-v1.0
+      - 'v*'
 
 jobs:
   release:
